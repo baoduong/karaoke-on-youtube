@@ -91,6 +91,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"   # iPhone and iPad
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: true
+        # Single 1024x1024 source; iOS derives every other size. The art is
+        # kept at specs/icon-app.png and downscaled into the asset catalog.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     preBuildScripts:
       # T008 — SwiftLint. Degrades to a notice when not installed so a fresh
       # checkout still builds; install with `brew install swiftlint`.
