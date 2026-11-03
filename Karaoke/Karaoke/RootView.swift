@@ -76,6 +76,13 @@ struct RootView: View {
                 .tag(3)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        // Locked to dark rather than following the system. The palette is a
+        // fixed set of values, and the room this gets used in is dim; a light
+        // appearance switching on mid-party would be worse than no choice at
+        // all. Declaring it keeps the behaviour deliberate instead of a side
+        // effect of the palette ignoring the system setting.
+        .preferredColorScheme(.dark)
+        .tint(Theme.Palette.accent)
         .modelContext(modelContext)
         .task {
             queueService.restoreOnLaunch()
