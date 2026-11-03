@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# Xcode — user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Xcode — build output
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Generated project. Reproduce with `xcodegen generate` from Karaoke/.
+# project.yml is the source of truth and IS committed.
+Karaoke/Karaoke.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# Local configuration — never commit keys
+Karaoke/Karaoke/Secrets.plist
+*.local.xcconfig
+
+# Spec Kit machine-local state
+.specify/feature.json
+.specify/extensions/*/local-config.yml
+.specify/integrations/packages/
+.specify/integrations/packages.json
+
+# Agent tooling state
+.omo/
+.opencode/node_modules/
