@@ -79,6 +79,7 @@ struct RootView: View {
         .modelContext(modelContext)
         .task {
             queueService.restoreOnLaunch()
+            runDemoSearchIfRequested()
             await startDemoSongIfRequested()
         }
         .onReceive(Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()) { _ in
@@ -245,6 +246,17 @@ struct RootView: View {
         return (0...3).contains(requested) ? requested : 0
         #else
         return 0
+        #endif
+    }
+
+    /// DEBUG-only: run a search given with `-uiDemoSearch <query>`, so the
+    /// result rows can be inspected with real Vietnamese titles rather than
+    /// imagined ones.
+    private func runDemoSearchIfRequested() {
+        #if DEBUG
+        guard let query = UserDefaults.standard.string(forKey: "uiDemoSearch"), !query.isEmpty else { return }
+        searchViewModel.queryText = query
+        searchViewModel.resolveDirectReference()
         #endif
     }
 
