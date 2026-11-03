@@ -80,6 +80,7 @@ final class MediaStore {
             LyricsTrack.self,
             LyricsLine.self,
             LyricsWord.self,
+            SessionLog.self,
         ])
 
         let modelConfiguration = ModelConfiguration(
@@ -108,6 +109,7 @@ final class MediaStore {
             LyricsTrack.self,
             LyricsLine.self,
             LyricsWord.self,
+            SessionLog.self,
         ])
 
         let modelConfiguration = ModelConfiguration(
