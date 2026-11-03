@@ -16,6 +16,7 @@ struct PlayerVideoStage: View {
     let player: AVPlayer?
     let isLoaded: Bool
     let route: OutputRoute
+    var isStarting: Bool = false
     var onShowQualityDetail: () -> Void
 
     var body: some View {
@@ -26,9 +27,13 @@ struct PlayerVideoStage: View {
                 } else {
                     ZStack {
                         Theme.Palette.surface
-                        Image(systemName: "music.note.tv")
-                            .font(.system(size: 44, weight: .light))
-                            .foregroundStyle(Theme.Palette.textTertiary)
+                        if isStarting {
+                            startingIndicator
+                        } else {
+                            Image(systemName: "music.note.tv")
+                                .font(.system(size: 44, weight: .light))
+                                .foregroundStyle(Theme.Palette.textTertiary)
+                        }
                     }
                 }
             }
@@ -39,6 +44,16 @@ struct PlayerVideoStage: View {
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
         .background(Color.black)
+    }
+
+    private var startingIndicator: some View {
+        VStack(spacing: Theme.Space.sm) {
+            ProgressView()
+                .tint(Theme.Palette.accent)
+            Text("Starting…")
+                .font(.subheadline)
+                .foregroundStyle(Theme.Palette.textSecondary)
+        }
     }
 
     /// Names the route and, when it re-encodes, says so.

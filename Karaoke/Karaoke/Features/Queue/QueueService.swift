@@ -152,6 +152,18 @@ final class QueueService {
         advanceToNextWaiting()
     }
 
+    /// Called when the current song reached its end.
+    ///
+    /// Marks it played and stops there. Unlike `currentFinished()` the next
+    /// entry is not promoted, because nothing is going to start on its own —
+    /// in a room full of people the next singer decides, not the app.
+    func currentPlayedOut() {
+        guard let entry = current else { return }
+        entry.state = .played
+        save()
+        loadEntries()
+    }
+
     /// Called by the playback layer when the current entry's resolution fails.
     ///
     /// The entry becomes `failed` and the queue advances — one dead song must
@@ -164,6 +176,33 @@ final class QueueService {
         }
         save()
         advanceToNextWaiting()
+    }
+
+    // MARK: - Reflecting what is playing
+
+    /// Points the queue at the song that is actually playing.
+    ///
+    /// Every way of starting a song must call this. While only the queue tap
+    /// did, songs started from search or a suggestion left the old entry
+    /// badged NOW PLAYING forever.
+    ///
+    /// `entryID` names the exact row when one was tapped, since the same song
+    /// can sit in the queue twice. No matching row — or a nil `songID`, when
+    /// playback was abandoned — leaves no current entry.
+    ///
+    /// The outgoing entry becomes `skipped`, not `played`: it did not play
+    /// out, and `played` feeds the statistics the recommender reads.
+    func setCurrent(entryID: UUID? = nil, songID: String?) {
+        loadEntries()
+        let target = entryID.flatMap { id in entries.first { $0.id == id } }
+            ?? songID.flatMap { id in entries.first { $0.songID == id } }
+
+        if let existing = current, existing.id != target?.id {
+            existing.state = .skipped
+        }
+        target?.state = .current
+        save()
+        loadEntries()
     }
 
     // MARK: - Private helpers

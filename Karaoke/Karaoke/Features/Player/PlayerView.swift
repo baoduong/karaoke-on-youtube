@@ -16,17 +16,12 @@ struct PlayerView: View {
     var song: SongMetadata?
     var onDismiss: (() -> Void)?
 
-    @State private var volume: Double = 1.0
-    @State private var showQualityDetail = false
-
     private var isPlaying: Bool { session.state == .playing }
 
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
             songInfo
-            positionBar
             transportControls
-            volumeControl
         }
         // Capped rather than stretched. At full iPad width a 16:9 video
         // becomes a short wide band with the controls marooned beneath it,
@@ -34,12 +29,7 @@ struct PlayerView: View {
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Theme.Space.lg)
-        .sheet(isPresented: $showQualityDetail) {
-            QualityDetailView(
-                rendition: session.selectedRendition,
-                outputRoute: session.outputRoute
-            )
-        }
+        .padding(.bottom, Theme.Space.sm)
     }
 
     // MARK: Song info
@@ -59,63 +49,8 @@ struct PlayerView: View {
                     .lineLimit(1)
             }
 
-            if let rendition = session.selectedRendition {
-                Text(renditionSummary(rendition))
-                    .font(.caption)
-                    .foregroundStyle(Theme.Palette.textTertiary)
-            }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private func renditionSummary(_ rendition: AudioRendition) -> String {
-        var parts = [containerLabel(rendition.container), codecLabel(rendition.codec)]
-        if let bitrate = rendition.averageBitrateBps {
-            parts.append("\(bitrate / 1000) kbps")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func containerLabel(_ container: Container) -> String {
-        switch container {
-        case .m4a:              return "M4A"
-        case .webm:             return "WebM"
-        case .mp4:              return "MP4"
-        case .other(let raw):   return raw.uppercased()
-        }
-    }
-
-    private func codecLabel(_ codec: Codec) -> String {
-        switch codec {
-        case .aac:              return "AAC"
-        case .opus:             return "Opus"
-        case .vorbis:           return "Vorbis"
-        case .other(let raw):   return raw.uppercased()
-        }
-    }
-
-    // MARK: Position
-
-    private var positionBar: some View {
-        VStack(spacing: Theme.Space.xs) {
-            Slider(
-                value: Binding(
-                    get: { min(session.positionSeconds, max(session.durationSeconds, 1)) },
-                    set: { newValue in Task { await session.seek(to: newValue) } }
-                ),
-                in: 0...max(session.durationSeconds, 1)
-            )
-            .tint(Theme.Palette.accent)
-            .disabled(session.durationSeconds <= 0)
-
-            HStack {
-                Text(session.positionSeconds.asDurationLabel)
-                Spacer()
-                Text(session.durationSeconds.asDurationLabel)
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(Theme.Palette.textSecondary)
-        }
     }
 
     // MARK: Transport
@@ -152,21 +87,5 @@ struct PlayerView: View {
                 .foregroundStyle(Theme.Palette.textPrimary)
                 .frame(width: Theme.Hit.control, height: Theme.Hit.control)
         }
-    }
-
-    // MARK: Volume
-
-    private var volumeControl: some View {
-        HStack(spacing: Theme.Space.md) {
-            Image(systemName: "speaker.fill")
-            Slider(value: $volume, in: 0...1) { editing in
-                if !editing { session.setVolume(volume) }
-            }
-            .tint(Theme.Palette.accent)
-            Image(systemName: "speaker.wave.3.fill")
-        }
-        .font(.caption)
-        .foregroundStyle(Theme.Palette.textSecondary)
-        .padding(.bottom, Theme.Space.sm)
     }
 }

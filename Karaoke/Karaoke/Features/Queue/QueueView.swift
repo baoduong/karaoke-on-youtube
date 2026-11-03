@@ -23,6 +23,9 @@ struct QueueView: View {
 
     @Bindable var service: QueueService
 
+    /// Tapping any row plays it, history included — a set list gets sung again.
+    var onPlay: ((QueueEntry) -> Void)?
+
     @Environment(\.modelContext) private var context
 
     // MARK: - Body
@@ -57,20 +60,30 @@ struct QueueView: View {
 
     // MARK: - Subviews
 
+    /// One tappable row, with the insets every section shares.
+    private func row(_ entry: QueueEntry) -> some View {
+        Button {
+            onPlay?(entry)
+        } label: {
+            QueueRowView(entry: entry, context: context)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(
+            top: Theme.Space.xs,
+            leading: Theme.Space.lg,
+            bottom: Theme.Space.xs,
+            trailing: Theme.Space.lg
+        ))
+    }
+
     private var queueList: some View {
         List {
             // Current entry — shown separately, cannot be reordered.
             if let current = service.current {
                 Section {
-                    QueueRowView(entry: current, context: context)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(
-                            top: Theme.Space.xs,
-                            leading: Theme.Space.lg,
-                            bottom: Theme.Space.xs,
-                            trailing: Theme.Space.lg
-                        ))
+                    row(current)
                 } header: {
                     SectionHeading(title: "Now Playing")
                         .textCase(nil)
@@ -82,15 +95,7 @@ struct QueueView: View {
             if !service.waiting.isEmpty {
                 Section {
                     ForEach(service.waiting, id: \.id) { entry in
-                        QueueRowView(entry: entry, context: context)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(
-                                top: Theme.Space.xs,
-                                leading: Theme.Space.lg,
-                                bottom: Theme.Space.xs,
-                                trailing: Theme.Space.lg
-                            ))
+                        row(entry)
                     }
                     .onMove { source, destination in
                         service.move(fromOffsets: source, toOffset: destination)
@@ -118,15 +123,7 @@ struct QueueView: View {
             if !history.isEmpty {
                 Section {
                     ForEach(history, id: \.id) { entry in
-                        QueueRowView(entry: entry, context: context)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(
-                                top: Theme.Space.xs,
-                                leading: Theme.Space.lg,
-                                bottom: Theme.Space.xs,
-                                trailing: Theme.Space.lg
-                            ))
+                        row(entry)
                     }
                 } header: {
                     SectionHeading(title: "History")

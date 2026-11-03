@@ -453,4 +453,195 @@ struct QueueServiceTests {
             #expect(waitingCount == 2)
         }
     }
+
+    // MARK: - Reaching the end without advancing
+
+    @Suite("Playing out without advancing")
+    struct PlayedOutTests {
+
+        @Test("the finished song is marked played")
+        @MainActor
+        func marksPlayed() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            let target = try #require(service.waiting.first)
+            service.setCurrent(entryID: target.id, songID: target.songID)
+
+            service.currentPlayedOut()
+
+            let finished = try #require(
+                service.entries.first { $0.songID == "aaaaaaaaaaa" }
+            )
+            #expect(finished.state == .played)
+        }
+
+        @Test("the next song is not promoted — nothing starts on its own")
+        @MainActor
+        func doesNotPromoteNext() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            let target = try #require(service.waiting.first)
+            service.setCurrent(entryID: target.id, songID: target.songID)
+
+            service.currentPlayedOut()
+
+            #expect(service.current == nil)
+            #expect(service.waiting.map(\.songID) == ["bbbbbbbbbbb"])
+        }
+
+        @Test("reaching the end with nothing current changes nothing")
+        @MainActor
+        func noCurrentIsNoOp() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+
+            service.currentPlayedOut()
+
+            #expect(service.waiting.count == 1)
+            #expect(service.entries.allSatisfy { $0.state == .waiting })
+        }
+    }
+
+    // MARK: - Reflecting what is playing
+
+    @Suite("Reflecting what is playing")
+    struct SetCurrentTests {
+
+        @Test("tapping a waiting entry makes it current")
+        @MainActor
+        func promotesWaiting() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+
+            let target = service.waiting[1]
+            service.setCurrent(entryID: target.id, songID: target.songID)
+
+            #expect(service.current?.songID == "bbbbbbbbbbb")
+        }
+
+        @Test("the abandoned song is recorded as skipped, not played")
+        @MainActor
+        func previousBecomesSkipped() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            service.currentFinished()
+
+            let playing = try #require(service.current)
+            #expect(playing.songID == "aaaaaaaaaaa")
+
+            let target = try #require(service.waiting.first)
+            service.setCurrent(entryID: target.id, songID: target.songID)
+
+            let abandoned = try #require(
+                service.entries.first { $0.songID == "aaaaaaaaaaa" }
+            )
+            #expect(abandoned.state == .skipped)
+        }
+
+        @Test("at most one entry is current after jumping")
+        @MainActor
+        func singleCurrentInvariant() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            service.enqueue(songID: "ccccccccccc")
+            service.currentFinished()
+
+            let target = try #require(service.waiting.last)
+            service.setCurrent(entryID: target.id, songID: target.songID)
+
+            let currentCount = service.entries.filter { $0.state == .current }.count
+            #expect(currentCount == 1)
+        }
+
+        @Test("a played entry can be made current again")
+        @MainActor
+        func replaysFromHistory() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            service.currentFinished()
+            service.currentFinished()
+
+            let played = try #require(
+                service.entries.first { $0.state == .played }
+            )
+            service.setCurrent(entryID: played.id, songID: played.songID)
+
+            #expect(service.current?.id == played.id)
+        }
+
+        @Test("re-tapping the current entry leaves the queue untouched")
+        @MainActor
+        func retappingCurrentIsNoOp() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            service.currentFinished()
+
+            let playing = try #require(service.current)
+            service.setCurrent(entryID: playing.id, songID: playing.songID)
+
+            #expect(service.current?.id == playing.id)
+            #expect(service.waiting.count == 1)
+        }
+
+        @Test("playing a song that is not queued leaves no entry current")
+        @MainActor
+        func unqueuedSongClearsCurrent() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.currentFinished()
+            #expect(service.current != nil)
+
+            service.setCurrent(songID: "zzzzzzzzzzz")
+
+            #expect(service.current == nil)
+        }
+
+        @Test("the song left behind by an unqueued start is skipped")
+        @MainActor
+        func unqueuedStartSkipsPrevious() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.currentFinished()
+
+            service.setCurrent(songID: "zzzzzzzzzzz")
+
+            let abandoned = try #require(
+                service.entries.first { $0.songID == "aaaaaaaaaaa" }
+            )
+            #expect(abandoned.state == .skipped)
+        }
+
+        @Test("a queued song started from elsewhere takes over the badge")
+        @MainActor
+        func queuedSongMatchedBySongID() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "bbbbbbbbbbb")
+            service.currentFinished()
+
+            service.setCurrent(songID: "bbbbbbbbbbb")
+
+            #expect(service.current?.songID == "bbbbbbbbbbb")
+        }
+
+        @Test("with the song queued twice, the tapped row is the one that lights up")
+        @MainActor
+        func duplicateSongUsesTappedRow() throws {
+            let service = try makeService()
+            service.enqueue(songID: "aaaaaaaaaaa")
+            service.enqueue(songID: "aaaaaaaaaaa")
+
+            let second = service.waiting[1]
+            service.setCurrent(entryID: second.id, songID: second.songID)
+
+            #expect(service.current?.id == second.id)
+        }
+    }
 }

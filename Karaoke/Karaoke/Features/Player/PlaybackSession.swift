@@ -267,21 +267,38 @@ final class PlaybackSession {
     ///
     /// A saved local copy still wins: it starts faster and works offline, and
     /// it is audio-only by design.
-    func playHLS(songID: String, manifestURL: URL, rendition: AudioRendition) async {
-        if localURL(for: songID) != nil {
-            await play(songID: songID, rendition: rendition)
-            return
-        }
-
+    /// Returns false when the manifest would not open, so the caller can fall
+    /// back to the audio-only path rather than failing the song outright.
+    ///
+    /// Takes no rendition. The manifest names its own audio, and an itag is
+    /// only needed to build an audio-only stream URL — yet resolving one
+    /// upstream measured 23 s, which the singer used to wait through before
+    /// hearing anything. The quality description is attached afterwards by
+    /// `describe(rendition:forSongID:)`.
+    func playHLS(songID: String, manifestURL: URL) async -> Bool {
         self.songID = songID
-        self.selectedRendition = rendition
+        self.selectedRendition = nil
         self.halfwayReached = false
         transition(to: .resolving)
 
-        if !isNetworkAvailable() {
-            transition(to: .failed(.offlineUnsaved))
-            return
+        if let localURL = localURL(for: songID) {
+            do {
+                transition(to: .buffering)
+                try pipeline.prepare()
+                try await pipeline.load(source: .local(localURL))
+                try pipeline.play()
+                transition(to: .playing)
+                return true
+            } catch {
+                DiagnosticLog.recordEnvironmentError(
+                    .offline,
+                    songID: songID,
+                    providerID: SourceProviderID(rawValue: "PlaybackSession.local")
+                )
+            }
         }
+
+        guard isNetworkAvailable() else { return false }
 
         do {
             transition(to: .buffering)
@@ -289,16 +306,24 @@ final class PlaybackSession {
             try await pipeline.load(source: .hls(manifestURL))
             try pipeline.play()
             transition(to: .playing)
+            return true
         } catch {
-            // Video is an enhancement. If the manifest will not play, fall
-            // back to audio-only rather than failing the song outright.
             DiagnosticLog.recordEnvironmentError(
                 .offline,
                 songID: songID,
                 providerID: SourceProviderID(rawValue: "PlaybackSession.hls")
             )
-            await play(songID: songID, rendition: rendition)
+            return false
         }
+    }
+
+    /// Record which audio the stream carries, once that is known.
+    ///
+    /// Arrives after playback has already started, so it is ignored when the
+    /// singer has moved on — a late answer must not relabel a later song.
+    func describe(rendition: AudioRendition, forSongID songID: String) {
+        guard self.songID == songID else { return }
+        selectedRendition = rendition
     }
 
     /// Play a locally saved song (FR-030).
