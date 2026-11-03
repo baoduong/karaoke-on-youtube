@@ -17,6 +17,7 @@ struct RootView: View {
     @State private var favouritesService: FavouritesService
     @State private var settings: PerformanceSettings
     @State private var suggestionsState: SuggestionsState = .idle
+    @State private var selectedTab: Int = Self.initialTab
     @State private var lyrics = LyricsViewModel()
 
     private let modelContext: ModelContext
@@ -58,21 +59,28 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             singTab
+                .tag(0)
                 .tabItem { Label("Sing", systemImage: "music.mic") }
 
             QueueView(service: queueService)
+                .tag(1)
                 .tabItem { Label("Queue", systemImage: "list.number") }
 
             libraryTab
+                .tag(2)
                 .tabItem { Label("Library", systemImage: "heart") }
 
             SettingsView(settings: settings)
+                .tag(3)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .modelContext(modelContext)
-        .task { queueService.restoreOnLaunch() }
+        .task {
+            queueService.restoreOnLaunch()
+            await startDemoSongIfRequested()
+        }
         .onReceive(Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()) { _ in
             tickLyrics()
         }
@@ -118,7 +126,7 @@ struct RootView: View {
                 )
             } else {
                 ScrollView {
-                    PlayerView(session: session) {
+                    PlayerView(session: session, song: song) {
                         showPlayer = false
                         session.stop()
                     }
@@ -226,6 +234,35 @@ struct RootView: View {
             globalOffsetMs: lyrics.track?.globalOffsetMs ?? 0,
             manualLyricsOffsetMs: settings.manualLyricsOffsetMs
         )
+    }
+
+    /// DEBUG-only initial tab, set with `-uiTab <0-3>` at launch. The
+    /// simulator offers no way to tap a tab bar from the command line, so
+    /// screenshotting each tab during UI work needs this.
+    private static var initialTab: Int {
+        #if DEBUG
+        let requested = UserDefaults.standard.integer(forKey: "uiTab")
+        return (0...3).contains(requested) ? requested : 0
+        #else
+        return 0
+        #endif
+    }
+
+    /// DEBUG-only: auto-play a song given with `-uiDemoSong <videoID>`.
+    /// The simulator cannot be typed into from the command line, so verifying
+    /// the player's appearance needs a way in that is not the keyboard.
+    private func startDemoSongIfRequested() async {
+        #if DEBUG
+        guard let id = UserDefaults.standard.string(forKey: "uiDemoSong"), !id.isEmpty else { return }
+        do {
+            let metadata = try await router.metadata(for: SourceReference(songID: id))
+            pendingSong = metadata
+            showPlayer = true
+            await loadAndPlay(song: metadata)
+        } catch {
+            DiagnosticLog.recordMechanismError(error, songID: id, providerID: router.identifier)
+        }
+        #endif
     }
 
     // MARK: Factories

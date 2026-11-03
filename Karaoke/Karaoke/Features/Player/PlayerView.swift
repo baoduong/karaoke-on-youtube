@@ -1,52 +1,35 @@
-// T058 — PlayerView.
-//
-// Transport controls, position display, volume control, and active route indicator.
-//
-// Position is read from PlaybackSession.positionSeconds, which is driven by the
-// player's own clock — never a wall-clock timer (audio-pipeline.md requirement 1).
-//
-// Satisfies: FR-009, FR-013, FR-014, FR-017
-
 import SwiftUI
 
-// MARK: - PlayerView
-
-/// The player screen. Shows transport controls, position, volume, and route.
+/// The player screen.
+///
+/// The video is the hero, not decoration: most karaoke uploads burn the words
+/// into the picture, so the video *is* the lyrics. Everything else is arranged
+/// around it, and no control covers its centre, where the text sits.
 ///
 /// Position comes from the player's clock via PlaybackSession — never a
 /// wall-clock timer (audio-pipeline.md Behavioural requirement 1).
 struct PlayerView: View {
 
     @Bindable var session: PlaybackSession
+    /// The chosen song. The session only knows an id; the title and channel
+    /// the singer recognises live here.
+    var song: SongMetadata?
     var onDismiss: (() -> Void)?
 
     @State private var volume: Double = 1.0
     @State private var showQualityDetail = false
 
+    private var isPlaying: Bool { session.state == .playing }
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Route indicator bar
-            routeIndicator
-
-            Spacer()
-
-            // Song info
+        VStack(spacing: Theme.Space.lg) {
+            videoStage
             songInfo
-
-            Spacer()
-
-            // Position and seek
             positionBar
-
-            // Transport controls
             transportControls
-
-            // Volume
             volumeControl
-
-            Spacer(minLength: 20)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Theme.Space.lg)
         .sheet(isPresented: $showQualityDetail) {
             QualityDetailView(
                 rendition: session.selectedRendition,
@@ -55,212 +38,211 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: Route indicator (FR-014)
+    // MARK: Video stage
 
-    private var routeIndicator: some View {
-        HStack {
-            Image(systemName: routeIcon)
-                .foregroundStyle(session.outputRoute.degradesQuality ? .orange : .green)
-
-            Text(routeLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if session.outputRoute.degradesQuality {
-                Text("(re-encoded)")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
+    /// 16:9 at full width, with the route badge overlaid in a corner so it
+    /// costs no vertical space and never sits over the centre of the frame.
+    private var videoStage: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let player = session.videoPlayer, session.songID != nil {
+                    SourceVideoView(player: player)
+                } else {
+                    ZStack {
+                        Theme.Palette.surface
+                        Image(systemName: "music.note.tv")
+                            .font(.system(size: 44, weight: .light))
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                    }
+                }
             }
+            .aspectRatio(16.0 / 9.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
 
-            Spacer()
+            routeBadge.padding(Theme.Space.sm)
+        }
+    }
 
+    // MARK: Route badge (FR-014)
+
+    /// Names the route and, when it re-encodes, says so.
+    ///
+    /// Bluetooth compresses the audio again before transmitting. The app
+    /// discloses that rather than claiming a bitrate the link discards — but
+    /// as a calm note, not an alarm: it is the normal, chosen setup.
+    private var routeBadge: some View {
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: routeIcon)
+                .font(.caption2)
+            Text(routeName)
+                .font(.caption2.weight(.medium))
+                .lineLimit(1)
+            if session.outputRoute.degradesQuality {
+                Text("re-encoded")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.Palette.textSecondary)
+            }
             Button {
                 showQualityDetail = true
             } label: {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
+                    .font(.caption2)
             }
+            .accessibilityLabel("Audio quality detail")
         }
-        .padding(.vertical, 8)
+        .foregroundStyle(Theme.Palette.textPrimary)
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.vertical, 5)
+        .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    private var routeName: String {
+        switch session.outputRoute.kind {
+        case .bluetoothA2DP:  return "Bluetooth"
+        case .airPlay:        return "AirPlay"
+        case .usbAudio:       return "USB"
+        case .wiredLineOut:   return "Wired"
+        case .builtInSpeaker: return "Phone speaker"
+        case .other:          return "Output"
+        }
     }
 
     private var routeIcon: String {
         switch session.outputRoute.kind {
-        case .bluetoothA2DP: return "hifispeaker.fill"
-        case .builtInSpeaker: return "speaker.wave.2.fill"
-        case .wiredLineOut: return "headphones"
-        case .usbAudio: return "cable.connector"
-        case .airPlay: return "airplayvideo"
-        case .other: return "speaker.fill"
-        }
-    }
-
-    private var routeLabel: String {
-        switch session.outputRoute.kind {
-        case .bluetoothA2DP: return "Bluetooth A2DP"
-        case .builtInSpeaker: return "Built-in Speaker"
-        case .wiredLineOut: return "Wired Output"
-        case .usbAudio: return "USB Audio"
-        case .airPlay: return "AirPlay"
-        case .other: return "Audio Output"
+        case .bluetoothA2DP:  return "hifispeaker.fill"
+        case .airPlay:        return "airplayaudio"
+        case .usbAudio:       return "cable.connector"
+        case .wiredLineOut:   return "headphones"
+        case .builtInSpeaker: return "iphone"
+        case .other:          return "speaker.wave.2"
         }
     }
 
     // MARK: Song info
 
     private var songInfo: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "music.note")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
+        VStack(spacing: Theme.Space.xs) {
+            Text(song?.title ?? "Nothing playing")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Theme.Palette.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
 
-            if let id = session.songID {
-                Text(id)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            } else {
-                Text("No song loaded")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+            if let channel = song?.channelName, !channel.isEmpty {
+                Text(channel)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Palette.textSecondary)
+                    .lineLimit(1)
             }
 
             if let rendition = session.selectedRendition {
                 Text(renditionSummary(rendition))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Palette.textTertiary)
             }
         }
-        .padding()
+        .frame(maxWidth: .infinity)
     }
 
     private func renditionSummary(_ rendition: AudioRendition) -> String {
-        var parts: [String] = []
-        switch rendition.codec {
-        case .aac: parts.append("AAC")
-        case .opus: parts.append("Opus")
-        case .vorbis: parts.append("Vorbis")
-        case .other(let s): parts.append(s)
-        }
-        if let bps = rendition.averageBitrateBps {
-            parts.append("\(bps / 1000) kbps")
+        var parts = [containerLabel(rendition.container), codecLabel(rendition.codec)]
+        if let bitrate = rendition.averageBitrateBps {
+            parts.append("\(bitrate / 1000) kbps")
         }
         return parts.joined(separator: " · ")
     }
 
-    // MARK: Position bar
+    private func containerLabel(_ container: Container) -> String {
+        switch container {
+        case .m4a:              return "M4A"
+        case .webm:             return "WebM"
+        case .mp4:              return "MP4"
+        case .other(let raw):   return raw.uppercased()
+        }
+    }
+
+    private func codecLabel(_ codec: Codec) -> String {
+        switch codec {
+        case .aac:              return "AAC"
+        case .opus:             return "Opus"
+        case .vorbis:           return "Vorbis"
+        case .other(let raw):   return raw.uppercased()
+        }
+    }
+
+    // MARK: Position
 
     private var positionBar: some View {
-        VStack(spacing: 4) {
-            if session.durationSeconds > 0 {
-                Slider(
-                    value: Binding(
-                        get: { session.positionSeconds },
-                        set: { newValue in
-                            Task { await session.seek(to: newValue) }
-                        }
-                    ),
-                    in: 0...max(session.durationSeconds, 1)
-                )
-            } else {
-                Slider(value: .constant(0), in: 0...1)
-                    .disabled(true)
-            }
+        VStack(spacing: Theme.Space.xs) {
+            Slider(
+                value: Binding(
+                    get: { min(session.positionSeconds, max(session.durationSeconds, 1)) },
+                    set: { newValue in Task { await session.seek(to: newValue) } }
+                ),
+                in: 0...max(session.durationSeconds, 1)
+            )
+            .tint(Theme.Palette.accent)
+            .disabled(session.durationSeconds <= 0)
 
             HStack {
-                Text(formatTime(session.positionSeconds))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                Text(session.positionSeconds.asDurationLabel)
                 Spacer()
-                Text(formatTime(session.durationSeconds))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                Text(session.durationSeconds.asDurationLabel)
             }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(Theme.Palette.textSecondary)
         }
-        .padding(.vertical, 8)
     }
 
-    // MARK: Transport controls
+    // MARK: Transport
 
+    /// Play/pause is oversized on purpose: it is pressed one-handed while the
+    /// other hand holds a microphone.
     private var transportControls: some View {
-        HStack(spacing: 40) {
-            Button {
+        HStack(spacing: Theme.Space.xl) {
+            transportButton("gobackward.10") {
                 Task { await session.seek(to: max(0, session.positionSeconds - 10)) }
-            } label: {
-                Image(systemName: "gobackward.10")
-                    .font(.title2)
             }
-            .disabled(session.songID == nil)
-
-            playPauseButton
 
             Button {
-                let target = min(session.durationSeconds, session.positionSeconds + 10)
-                Task { await session.seek(to: target) }
+                if isPlaying { session.pause() } else { session.resume() }
             } label: {
-                Image(systemName: "goforward.10")
-                    .font(.title2)
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .frame(width: Theme.Hit.primaryControl, height: Theme.Hit.primaryControl)
+                    .background(Theme.Palette.accent, in: Circle())
             }
-            .disabled(session.songID == nil)
-        }
-        .padding(.vertical, 16)
-    }
+            .accessibilityLabel(isPlaying ? "Pause" : "Play")
 
-    @ViewBuilder
-    private var playPauseButton: some View {
-        switch session.state {
-        case .playing:
-            Button {
-                session.pause()
-            } label: {
-                Image(systemName: "pause.circle.fill")
-                    .font(.system(size: 56))
+            transportButton("goforward.10") {
+                Task { await session.seek(to: min(session.durationSeconds, session.positionSeconds + 10)) }
             }
-
-        case .buffering, .resolving:
-            ProgressView()
-                .scaleEffect(1.5)
-                .frame(width: 56, height: 56)
-
-        default:
-            Button {
-                session.resume()
-            } label: {
-                Image(systemName: "play.circle.fill")
-                    .font(.system(size: 56))
-            }
-            .disabled(session.songID == nil)
         }
     }
 
-    // MARK: Volume control (FR-013)
+    private func transportButton(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(Theme.Palette.textPrimary)
+                .frame(width: Theme.Hit.control, height: Theme.Hit.control)
+        }
+    }
+
+    // MARK: Volume
 
     private var volumeControl: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.md) {
             Image(systemName: "speaker.fill")
-                .foregroundStyle(.secondary)
-
-            Slider(value: $volume, in: 0...1) { _ in
-                session.setVolume(volume)
+            Slider(value: $volume, in: 0...1) { editing in
+                if !editing { session.setVolume(volume) }
             }
-
+            .tint(Theme.Palette.accent)
             Image(systemName: "speaker.wave.3.fill")
-                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 8)
-    }
-
-    // MARK: Helpers
-
-    private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        }
-        return String(format: "%d:%02d", minutes, secs)
+        .font(.caption)
+        .foregroundStyle(Theme.Palette.textSecondary)
+        .padding(.bottom, Theme.Space.sm)
     }
 }
