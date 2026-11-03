@@ -109,20 +109,33 @@ struct RootView: View {
         }
     }
 
+    /// Wrapped in a NavigationStack with a real toolbar rather than a
+    /// hand-rolled header row. The hand-rolled version sat outside any
+    /// navigation container, so the safe area was measured against the wrong
+    /// thing and left roughly 280pt of dead black above the controls.
     private func playerScreen(song: SongMetadata) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    showPlayer = false
-                    session.stop()
-                } label: {
-                    Image(systemName: "chevron.left")
-                    Text("Search")
+        NavigationStack {
+            playerBody(song: song)
+                .background(Theme.Palette.background)
+                .navigationTitle("Now Playing")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Theme.Palette.background, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showPlayer = false
+                            session.stop()
+                        } label: {
+                            Label("Search", systemImage: "chevron.left")
+                        }
+                    }
                 }
-                .padding()
-                Spacer()
-            }
+        }
+    }
 
+    @ViewBuilder
+    private func playerBody(song: SongMetadata) -> some View {
+        VStack(spacing: 0) {
             if let error = session.lastError {
                 PlaybackErrorView(
                     error: error,
