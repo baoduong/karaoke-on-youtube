@@ -11,6 +11,7 @@ import Testing
 import Foundation
 import AVFoundation
 import SwiftData
+import SwiftUI
 @testable import Karaoke
 
 // MARK: - Attachment
@@ -286,5 +287,26 @@ struct EqualizerSettingsTests {
         #expect(EqualizerView.label(for: 0) == "0 dB")
         #expect(EqualizerView.label(for: 3) == "+3.0 dB")
         #expect(EqualizerView.label(for: -3) == "−3.0 dB")
+    }
+
+    /// Renders the sheet rather than asserting anything about how it looks.
+    ///
+    /// Layout is not what this guards: a SwiftUI view that compiles can still
+    /// trap or produce nothing at run time, and that failure would otherwise
+    /// only surface when someone opens the sheet mid-party. Both branches are
+    /// covered because the unavailable notice is a separate path.
+    @Test("the tone sheet renders in both availability states", arguments: [true, false])
+    @MainActor
+    func sheetRenders(isAvailable: Bool) {
+        let view = EqualizerView(
+            settings: .constant(EqualizerSettings(bassGainDB: 6, trebleGainDB: -3, isEnabled: true)),
+            isAvailable: isAvailable
+        ) { _ in }
+
+        let renderer = ImageRenderer(content: view.frame(width: 390, height: 700))
+        let image = renderer.uiImage
+
+        #expect(image != nil)
+        #expect((image?.size.width ?? 0) > 0)
     }
 }
