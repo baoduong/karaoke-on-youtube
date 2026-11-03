@@ -72,6 +72,8 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
     private var stalledObservation: NSKeyValueObservation?
 
     private var currentDuration: Double = 0
+
+    var duration: Double { currentDuration }
     private var _position: PlaybackPosition = .invalid
     private var _outputRoute: OutputRoute = .unknown
     /// Position captured when the pipeline pauses due to interruption or route loss (T130, T131).

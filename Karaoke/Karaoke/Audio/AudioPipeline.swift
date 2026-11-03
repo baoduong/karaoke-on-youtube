@@ -68,6 +68,12 @@ protocol AudioPipeline: AnyObject, Sendable {
     /// how lyric drift appears (audio-pipeline.md Behavioural requirement 1).
     var position: PlaybackPosition { get }
 
+    /// Total length of the loaded item, or 0 while unknown.
+    ///
+    /// For HLS this arrives asynchronously after the manifest is parsed, so
+    /// callers must read it repeatedly rather than once at load time.
+    var duration: Double { get }
+
     // MARK: Level only (FR-013)
 
     /// Set the output volume.

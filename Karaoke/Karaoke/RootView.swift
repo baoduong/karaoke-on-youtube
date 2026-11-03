@@ -139,10 +139,6 @@ struct RootView: View {
                         session.stop()
                     }
 
-                    SourceVideoView(player: session.videoPlayer)
-                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                        .padding(.top, 12)
-
                     LyricsView(viewModel: lyrics, fontScale: settings.lyricsFontScale)
                         .padding(.top, 12)
 

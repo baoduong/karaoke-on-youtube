@@ -26,6 +26,7 @@ struct VolumeTests {
         func pause() {}
         func seek(to seconds: Double) async throws(AudioError) {}
         var position: PlaybackPosition { .invalid }
+        var duration: Double { 0 }
         var outputRoute: OutputRoute { .unknown }
         var events: AsyncStream<AudioPipelineEvent> {
             AsyncStream { _ in }

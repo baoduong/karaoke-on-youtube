@@ -421,6 +421,10 @@ final class PlaybackSession {
         switch event {
         case .positionUpdated(let pos):
             positionSeconds = pos.seconds
+            // Duration is read on every tick, not once after loading: for HLS
+            // it is unknown until the manifest has been parsed, and a value
+            // captured too early leaves the scrubber stuck at zero length.
+            durationSeconds = pipeline.duration
             checkHalfway(position: pos.seconds)
 
         case .stateChanged(let playbackState):
