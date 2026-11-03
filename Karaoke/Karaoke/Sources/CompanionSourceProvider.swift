@@ -318,6 +318,37 @@ final class CompanionSourceProvider: SourceProvider, @unchecked Sendable {
         )
     }
 
+    /// Maps the companion's 404 body onto the content-side taxonomy.
+    ///
+    /// The service distinguishes "this video cannot be played" from "our
+    /// extractor broke" and reports the first as 404 with a `reason`. Honouring
+    /// that here is what keeps a deleted upload from being reported as an app
+    /// fault — the single misclassification the taxonomy exists to prevent
+    /// (contracts/source-provider.md).
+    ///
+    /// An unrecognised reason stays mechanism-side on purpose: a 404 we cannot
+    /// explain means the service and the app disagree about the contract.
+    static func contentError(from data: Data, songID: SongID, stage: ResolutionStage) -> SourceError {
+        guard let body = try? JSONSerialization.jsonObject(data) as? [String: Any],
+              let reason = body["reason"] as? String
+        else {
+            return .upstreamContractChanged(detail: "companion returned 404 without a reason")
+        }
+
+        switch reason {
+        case "not_found":       return .notFound(songID)
+        case "private",
+             "members_only":    return .private_(songID)
+        case "removed":         return .removed(songID)
+        case "age_restricted":  return .ageRestricted(songID)
+        case "region_blocked":  return .regionBlocked(songID, region: nil)
+        case "live_stream":     return .liveStreamUnsupported(songID)
+        case "no_rendition":    return .noAudioRenditions(songID)
+        default:
+            return .resolutionFailed(songID, stage: stage, detail: "unrecognised companion reason '\(reason)'")
+        }
+    }
+
     // MARK: Private — networking
 
     private func fetch(url: URL, songID: SongID, stage: ResolutionStage) async throws(SourceError) -> Data {
@@ -328,7 +359,7 @@ final class CompanionSourceProvider: SourceProvider, @unchecked Sendable {
                     throw SourceError.resolutionFailed(songID, stage: stage, detail: "companion returned non-HTTP response")
                 }
                 if http.statusCode == 404 {
-                    throw SourceError.unknownItag(songID, itag: 0)
+                    throw Self.contentError(from: data, songID: songID, stage: stage)
                 }
                 if http.statusCode != 200 {
                     throw SourceError.resolutionFailed(songID, stage: stage, detail: "companion HTTP \(http.statusCode)")

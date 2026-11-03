@@ -28,6 +28,44 @@ from urllib.parse import parse_qs, urlparse
 TIMEOUT_SECONDS = 30
 
 
+class ContentUnavailable(Exception):
+    """The upstream explicitly said this video cannot be played.
+
+    Separate from every other failure on purpose. A removed or private video
+    is the singer's problem to route around; a parser that stopped working is
+    the maintainer's. Reporting the first as a server error — which is what
+    happens if yt-dlp's exit status is all we look at — makes a broken
+    extractor and an ordinary deleted upload indistinguishable, and that is
+    the one confusion the error taxonomy exists to prevent.
+    """
+
+    def __init__(self, reason: str, detail: str):
+        super().__init__(detail)
+        self.reason = reason
+        self.detail = detail
+
+
+# Matched against yt-dlp's stderr. Order matters: the more specific phrases
+# must be tested before the generic "unavailable".
+_CONTENT_SIGNATURES = [
+    ("private", ("private video", "this video is private")),
+    ("members_only", ("members-only", "join this channel")),
+    ("age_restricted", ("confirm your age", "age-restricted", "inappropriate for some users")),
+    ("region_blocked", ("not made this video available in your country", "blocked it in your country")),
+    ("live_stream", ("this live event", "premieres in", "is a live stream")),
+    ("removed", ("has been removed", "account associated with this video has been terminated")),
+    ("not_found", ("video is unavailable", "video unavailable", "does not exist", "incomplete youtube id")),
+]
+
+
+def classify_upstream_failure(message: str) -> ContentUnavailable | None:
+    lowered = message.lower()
+    for reason, needles in _CONTENT_SIGNATURES:
+        if any(needle in lowered for needle in needles):
+            return ContentUnavailable(reason, message.strip())
+    return None
+
+
 def run_ytdlp(args: list[str]) -> dict:
     """Run yt-dlp with the given args and return parsed JSON output."""
     cmd = ["yt-dlp", "--no-warnings", "--quiet"] + args
@@ -40,6 +78,8 @@ def run_ytdlp(args: list[str]) -> dict:
         )
         if result.returncode != 0:
             stderr = result.stderr.strip()
+            if content_error := classify_upstream_failure(stderr):
+                raise content_error
             raise RuntimeError(f"yt-dlp exited {result.returncode}: {stderr}")
         return json.loads(result.stdout)
     except subprocess.TimeoutExpired:
@@ -54,7 +94,10 @@ def run_ytdlp_lines(args: list[str]) -> list[dict]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
         if result.returncode != 0:
-            raise RuntimeError(f"yt-dlp exited {result.returncode}: {result.stderr.strip()}")
+            stderr = result.stderr.strip()
+            if content_error := classify_upstream_failure(stderr):
+                raise content_error
+            raise RuntimeError(f"yt-dlp exited {result.returncode}: {stderr}")
         return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"yt-dlp timed out after {TIMEOUT_SECONDS}s")
@@ -359,6 +402,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self._json(200, search(query, limit))
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
 
@@ -369,6 +414,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self._json(200, metadata(video_id))
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
 
@@ -387,6 +434,8 @@ class Handler(BaseHTTPRequestHandler):
             except LookupError as exc:
                 self._json(404, {"error": str(exc)})
                 return
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
                 return
@@ -404,6 +453,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result = resolve_renditions(video_id)
                 self._json(200, result)
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
 
@@ -423,6 +474,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, result)
             except LookupError as exc:
                 self._json(404, {"error": str(exc)})
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
 
