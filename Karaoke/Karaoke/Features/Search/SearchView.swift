@@ -80,6 +80,8 @@ struct SearchView: View {
             .foregroundStyle(trimmedQuery.isEmpty ? Theme.Palette.textTertiary : .black)
             .disabled(trimmedQuery.isEmpty)
         }
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, Theme.Space.lg)
         .padding(.bottom, Theme.Space.md)
     }
@@ -144,6 +146,8 @@ struct SearchView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, Theme.Space.lg)
             .padding(.bottom, Theme.Space.xl)
         }

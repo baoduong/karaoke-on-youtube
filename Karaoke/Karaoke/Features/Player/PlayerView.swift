@@ -29,6 +29,11 @@ struct PlayerView: View {
             transportControls
             volumeControl
         }
+        // Capped rather than stretched. At full iPad width a 16:9 video
+        // becomes a short wide band with the controls marooned beneath it,
+        // and the whole screen reads as mostly empty.
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, Theme.Space.lg)
         .sheet(isPresented: $showQualityDetail) {
             QualityDetailView(
