@@ -11,6 +11,18 @@ enum SavedContainer: String, Codable, Sendable {
     case webm
     case mp4
     case other
+
+    /// AVFoundation infers a container from the path extension, so every file
+    /// written to disk must carry a real one or decodability checks fail on
+    /// valid audio. `other` falls back to m4a, the only container iOS is
+    /// certain to decode.
+    var pathExtension: String {
+        switch self {
+        case .m4a, .other: return "m4a"
+        case .webm:        return "webm"
+        case .mp4:         return "mp4"
+        }
+    }
 }
 
 /// The audio codec of a saved rendition.

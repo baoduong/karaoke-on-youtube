@@ -77,7 +77,7 @@ enum ResolutionStage: Sendable, Equatable {
 /// The complete error taxonomy for the SourceProvider boundary.
 ///
 /// See contracts/source-provider.md for the classification rules.
-enum SourceError: Error, Sendable {
+enum SourceError: Error, Sendable, Equatable {
 
     // ── Content-side: the song cannot be played. Singer-facing. Queue advances. ──
     // These require the upstream to have EXPLICITLY said the item is unavailable.

@@ -131,14 +131,27 @@ struct RenditionSelectionTests {
 
     // MARK: - Unknown codec
 
-    @Test("Unknown codec ranks last")
-    func unknownCodecRanksLast() throws {
+    /// Codec preference is a tie-breaker, not an override of bitrate
+    /// (data-model.md Selection Rule steps 2 and 3). At equal bitrate a known
+    /// codec wins; a higher bitrate still wins outright.
+    @Test("Unknown codec ranks last at equal bitrate")
+    func unknownCodecRanksLastAtEqualBitrate() throws {
         let renditions = [
             makeRendition(itag: 999, codec: .other("ec-3"), bitrate: 128_000),
+            makeRendition(itag: 140, codec: .aac, bitrate: 128_000),
+        ]
+        let selected = try RenditionSelection.select(from: renditions, songID: "testSongID11")
+        #expect(selected.itag == 140, "At equal bitrate, a known codec beats an unknown one")
+    }
+
+    @Test("Higher bitrate wins even with an unknown codec")
+    func bitrateDominatesCodecPreference() throws {
+        let renditions = [
+            makeRendition(itag: 999, codec: .other("ec-3"), bitrate: 160_000),
             makeRendition(itag: 140, codec: .aac, bitrate: 64_000),
         ]
         let selected = try RenditionSelection.select(from: renditions, songID: "testSongID11")
-        #expect(selected.itag == 140, "AAC at lower bitrate should beat unknown codec at higher bitrate")
+        #expect(selected.itag == 999, "Bitrate is ranked before codec preference; it is not overridden by it")
     }
 
     // MARK: - Duplicate itag detection

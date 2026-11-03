@@ -68,8 +68,8 @@ struct SourceReferenceTests {
 
     @Test("Bare ID with underscores and hyphens")
     func bareIDWithSpecialChars() throws {
-        let ref = try SourceReference.parse("abc_def-ghij")
-        #expect(ref.songID == "abc_def-ghij")
+        let ref = try SourceReference.parse("abc_def-ghi")
+        #expect(ref.songID == "abc_def-ghi")
     }
 
     @Test("Bare ID with leading/trailing whitespace is trimmed")
