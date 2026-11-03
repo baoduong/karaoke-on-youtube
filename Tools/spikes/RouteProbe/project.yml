@@ -1,0 +1,35 @@
+name: RouteProbe
+
+options:
+  bundleIdPrefix: com.karaoke.personal.spike
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 48T636CL5V
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  RouteProbe:
+    type: application
+    platform: iOS
+    sources:
+      - RouteProbe
+    info:
+      path: RouteProbe/Info.plist
+      properties:
+        CFBundleDisplayName: RouteProbe
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.karaoke.personal.spike.RouteProbe
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: false

@@ -39,3 +39,6 @@ Karaoke/Karaoke/Secrets.plist
 # Agent tooling state
 .omo/
 .opencode/node_modules/
+
+# Generated spike project
+Tools/spikes/*/[A-Za-z]*.xcodeproj/
