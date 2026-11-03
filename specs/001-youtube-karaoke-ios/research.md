@@ -226,7 +226,36 @@ route delay  =  (camera gap, sound after flash)  +  37 ms
 
 So if the reported 112 ms is accurate, an external camera should show the sound arriving roughly **75 ms after** the flash.
 
-**Still open — needs an external camera**: a second device must film the iPhone screen while its microphone picks up the speaker through the air. A screen recording, a cable capture, or anything that taps the device internally cannot work, because the Bluetooth hop is exactly what must be included.
+#### External-camera measurement — RESOLVED 2026-11-03 **[verified]**
+
+An 18.6 s recording from a second device, 30 fps video with a microphone picking up the speaker through the air. Flash onsets were located by per-pixel variance to isolate the phone screen within the frame, then by brightness threshold; click onsets by audio envelope at 2 ms resolution.
+
+| Flash | Click | Gap |
+|---|---|---|
+| 5.765 s | 5.834 s | 69 ms |
+| 7.776 s | 7.876 s | 100 ms |
+| 9.787 s | 9.872 s | 85 ms |
+| 11.798 s | 11.892 s | 94 ms |
+| 15.820 s | 15.886 s | 66 ms |
+| 17.831 s | 17.884 s | 53 ms |
+
+Mean gap **77.8 ms** over six events. The 53–100 ms spread is mostly frame quantisation: 30 fps gives 33.5 ms resolution, so each reading carries about a frame of uncertainty and only the mean is meaningful.
+
+Applying the instrument calibration:
+
+```
+route delay = camera gap + 37 ms  =  77.8 + 37  ≈  115 ms
+reported by AVAudioSession         =            112.1 ms
+difference                         =              ~3 ms
+```
+
+**The system's reported `outputLatency` is accurate for this hardware.** Three decisions follow, and all three are now settled by measurement rather than judgement:
+
+1. **Automatic compensation is sufficient.** `LyricsTimeline` subtracting the live `outputLatencyMs` lands within a few milliseconds of truth, against an SC-008 budget of 150 ms. The residual is roughly 2% of the budget.
+2. **FR-020's manual trim defaults to zero.** It stays in the app because other speakers misreport, but this one does not need it.
+3. **The compensation is not optional.** Without it the words lead the sound by 115 ms — inside the budget on paper, which is precisely the trap noted above: it would look acceptable to a casual check and wrong to anyone actually singing.
+
+One methodological note worth keeping: the first attempt used a screen recording and measured 37 ms, which looked like a plausible answer and was not one. The number only became trustworthy once the recording method itself was checked against what it physically captures.
 
 ### Alternatives considered
 
@@ -432,9 +461,9 @@ Each is a named spike with a defined outcome. S1 blocks the quality claim and mu
 
 | ID | Question | Blocks | Status |
 |---|---|---|---|
-| **S5** | Route output latency over the actual PA speaker, with and without compensation | FR-019, FR-020, SC-008 | ⏳ **Open — needs the speaker** |
-| **S0** | Which codec the Bluetooth link negotiates; size the gap vs a cable | Honest quality claims, effort allocation | ⏳ **Open — needs the speaker** |
-| **S7** | Background audio, LAN access, and signature validity on a physical device | FR-015, companion provider, FR-036 | ⏳ **Open — needs a device** |
+| **S5** | Route output latency over the actual PA speaker, with and without compensation | FR-019, FR-020, SC-008 | ✅ **Resolved 2026-11-03 — reported value is accurate to ~3 ms** |
+| **S0** | Which codec the Bluetooth link negotiates; size the gap vs a cable | Honest quality claims, effort allocation | ✅ **Resolved 2026-11-03 — A2DP stereo 44.1 kHz** |
+| **S7** | Background audio, LAN access, and signature validity on a physical device | FR-015, companion provider, FR-036 | 🟡 **Partial — signing measured (7 days, free tier); audio/LAN need a playback session** |
 | **S1** | Can the platform decode Opus-in-WebM, directly or after remux? | FR-004 ranking, SC-004 | ⏳ Open — needs a device |
 | **S3** | Observed stream address lifetime vs declared expiry | FR-007 safety margin | ⏳ Open — needs network probing |
 | **S8** | Is upstream watch-next data reachable, and worth the churn? | Whether `upstreamRelated` ships | ✅ **Resolved 2026-11-03 — do not build it** |
