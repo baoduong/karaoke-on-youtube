@@ -67,6 +67,45 @@ Python 3.10+ (standard library only — no pip packages needed).
 ./run.sh --host 127.0.0.1   # local only
 ```
 
+## When YouTube starts refusing: cookies
+
+After enough extractions from one address, YouTube answers `Sign in to confirm
+you're not a bot` and every endpoint that needs a full extraction returns 500.
+Search keeps working, because it uses a shallower path.
+
+```bash
+python3 server.py --port 8080 --cookies-from-browser chrome
+```
+
+Measured on macOS, 2026-11-03: **Chrome worked. Safari and Edge did not** —
+Safari's cookies had already been rotated, Edge was not signed in. Firefox is
+usually the easiest because its cookie store is not encrypted, but it was not
+installed here.
+
+### Read this before turning it on
+
+**It attaches your Google account to every request.** yt-dlp's own wiki warns
+that using account cookies risks the account being restricted. A throwaway
+account is the safer choice; your main one is not.
+
+**YouTube rotates the cookies as a security measure**, which signs the browser
+out. Safari's failure above was exactly that, from an earlier session.
+
+**It changes what YouTube offers.** This one is not a warning in anyone's
+documentation and was found by measurement:
+
+| | Anonymous | Signed in |
+|---|---|---|
+| HLS audio | separate variant, itag 234 (~129 kbps) | none offered |
+| HLS video | separate video-only variants | — |
+| HLS muxed | — | itags 91-96, audio and video together |
+
+The split form is preferred and is what the service builds when it is
+available. Signed in, it falls back to a muxed variant — verified to carry
+both `h264` video and `aac` audio — at some cost in audio bitrate. Without
+that fallback, enabling cookies fixes metadata and search while breaking
+playback entirely, which is worse than the block it cures.
+
 ## iOS app configuration
 
 In the app's Settings → Companion Service, enter the service address (e.g. `http://192.168.1.10:7979`). The app will use the companion as a fallback when on-device resolution fails.

@@ -69,9 +69,18 @@ def classify_upstream_failure(message: str) -> ContentUnavailable | None:
     return None
 
 
+# Set once from --cookies-from-browser. Empty means anonymous, which is the
+# default and the safe choice; see the README before turning it on.
+_COOKIE_ARGS: list[str] = []
+
+
+def _ytdlp_command(args: list[str]) -> list[str]:
+    return ["yt-dlp", "--no-warnings", "--quiet"] + _COOKIE_ARGS + args
+
+
 def run_ytdlp(args: list[str]) -> dict:
     """Run yt-dlp with the given args and return parsed JSON output."""
-    cmd = ["yt-dlp", "--no-warnings", "--quiet"] + args
+    cmd = _ytdlp_command(args)
     try:
         result = subprocess.run(
             cmd,
@@ -93,7 +102,7 @@ def run_ytdlp(args: list[str]) -> dict:
 
 def run_ytdlp_lines(args: list[str]) -> list[dict]:
     """Run yt-dlp expecting one JSON object per line, as search results are."""
-    cmd = ["yt-dlp", "--no-warnings", "--quiet"] + args
+    cmd = _ytdlp_command(args)
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
         if result.returncode != 0:
@@ -359,12 +368,13 @@ def hls_manifest(video_id: str, min_height: int = MIN_VIDEO_HEIGHT) -> str:
         if height >= min_height and vcodec.startswith("avc1"):
             videos.append(fmt)
 
-    if not audio_url:
-        raise LookupError("no HLS audio variant available for this video")
     if not videos:
         raise LookupError(f"no H.264 HLS video variant at {min_height}p or above")
 
     videos.sort(key=lambda f: f.get("height") or 0)
+
+    if not audio_url:
+        return _muxed_manifest(videos)
 
     lines = [
         "#EXTM3U",
@@ -383,6 +393,36 @@ def hls_manifest(video_id: str, min_height: int = MIN_VIDEO_HEIGHT) -> str:
         )
         lines.append(fmt.get("url"))
 
+    return "\n".join(lines) + "\n"
+
+
+def _muxed_manifest(videos: list[dict]) -> str:
+    """
+    Fall back to HLS variants that already carry their own audio.
+
+    Signing in changes what YouTube offers. Anonymously it exposes a separate
+    audio-only variant (itag 234) to pair with video-only ones; with account
+    cookies it offers the older muxed variants 91-96 instead, where each
+    stream carries both. The split form is preferred because its audio is
+    itag 140 at about 129 kbps, but a muxed stream that plays beats a
+    split one that does not exist.
+
+    Quality is disclosed either way through the player's ⓘ sheet, so this
+    trades bitrate for availability without hiding the trade.
+    """
+    playable = [f for f in videos if str(f.get("acodec") or "none") != "none"]
+    if not playable:
+        raise LookupError("no HLS audio variant available for this video")
+
+    lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-INDEPENDENT-SEGMENTS"]
+    for fmt in playable:
+        bandwidth = int((fmt.get("tbr") or 0) * 1000) or 1_000_000
+        lines.append(
+            f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},"
+            f'RESOLUTION={fmt.get("width")}x{fmt.get("height")},'
+            f'CODECS="{fmt.get("vcodec")},{fmt.get("acodec")}"'
+        )
+        lines.append(fmt.get("url"))
     return "\n".join(lines) + "\n"
 
 
@@ -753,7 +793,22 @@ def main():
     parser = argparse.ArgumentParser(description="Karaoke companion service")
     parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=7979, help="Port (default: 7979)")
+    parser.add_argument(
+        "--cookies-from-browser",
+        metavar="BROWSER",
+        help=(
+            "Borrow YouTube cookies from a browser profile, e.g. chrome. "
+            "Off by default. Read the README first: this attaches your account "
+            "to every request and YouTube rotates the cookies, which logs the "
+            "browser out and can get the account restricted."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.cookies_from_browser:
+        global _COOKIE_ARGS
+        _COOKIE_ARGS = ["--cookies-from-browser", args.cookies_from_browser]
+        print(f"Using cookies from {args.cookies_from_browser} — account is attached to every request")
 
     # Threaded so a prewarm request, which takes seconds, cannot sit in front
     # of the tap the singer just made.
