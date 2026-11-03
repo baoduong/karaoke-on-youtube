@@ -164,7 +164,7 @@ enum AudioError: Error {
 
 1. **The player's clock is the only clock.** Position, lyric timing, and progress all read `position`. Nothing accumulates its own timer — that is how SC-008 drift appears.
 2. **Route delay is published, not assumed.** `outputLatencyMs` is read from the live route on every change. No hardcoded Bluetooth constant.
-3. **Nothing processes the samples.** Apart from volume, the output is the decoded source. No resampling, no normalisation, no EQ, no "enhancement". SC-007 verifies this by capture.
+3. **Nothing processes the samples except what the singer turned on.** Apart from volume and the tone control (FR-043), the output is the decoded source. No resampling, no normalisation, no automatic "enhancement" — nothing the singer did not ask for. With the tone control bypassed or flat, SC-007 verifies bit-identity by capture.
 4. **Seek is atomic for observers.** Once `seek(to:)` returns, `position` reflects the new value. A dependent view must never observe the old position afterwards (FR-023).
 5. **Never records.** Playback-only session on every code path, with no conditional that could configure otherwise.
 6. **Link trouble is not stream trouble.** A stall never triggers re-resolution.

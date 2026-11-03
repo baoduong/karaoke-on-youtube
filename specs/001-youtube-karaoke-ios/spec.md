@@ -138,10 +138,11 @@ The singer saves songs ahead of time so a party at a venue with poor connectivit
 
 **Audio playback**
 
-- **FR-009**: System MUST play the backing track through the device's selected output route, applying no processing to the decoded audio beyond level control.
+- **FR-009**: System MUST play the backing track through the device's selected output route, applying no processing to the decoded audio beyond level control and any tone shaping the singer has explicitly enabled (FR-043).
 - **FR-010**: System MUST NOT capture microphone input, request microphone permission, or apply vocal processing of any kind. Vocals are entirely the PA speaker's responsibility.
 - **FR-011**: System MUST NOT alter the pitch or tempo of the backing track. Songs play as published.
-- **FR-012**: System MUST select and play the best rendition available rather than attempting to improve a lesser one by processing.
+- **FR-012**: System MUST select and play the best rendition available rather than automatically compensating for a lesser one. Tone shaping the singer explicitly asks for (FR-043) is not a substitute for rendition quality and does not relax this requirement: nothing is applied unless the singer turns it on.
+- **FR-043**: System MAY offer the singer a tone control over the backing track — bass, mid and treble — so an upload that sounds wrong through the PA can be corrected from the app rather than at the speaker. It MUST default to flat, MUST be bypassable, and MUST NOT alter pitch or tempo (FR-011 is unaffected).
 - **FR-013**: System MUST let the singer control output volume, with changes taking effect without audible artefacts.
 - **FR-014**: System MUST report the active output route to the singer, and MUST indicate when the route is one that degrades audio quality.
 - **FR-015**: System MUST continue audio playback when the app is backgrounded or the screen is locked, and MUST respond to the system's standard playback controls and show current track information there.
@@ -211,7 +212,8 @@ The singer saves songs ahead of time so a party at a venue with poor connectivit
 - **SC-004**: The selected audio rendition is, in at least 95% of attempted songs, the highest-quality rendition the source offers that the device can decode — verified by comparing the app's reported selection against the renditions actually available.
 - **SC-005**: Resolution succeeds for at least 95% of a fixed 50-song reference list on any given day, and every failure produces a message that correctly distinguishes an unavailable song from a broken mechanism.
 - **SC-006**: Playback begins within 5 seconds of selection on a typical home connection, and within 1 second for a saved song.
-- **SC-007**: Volume changes take audible effect within 200 ms and introduce no audible click, gap, or dropout. Audio output is bit-identical to the decoded source apart from level, verified by capture.
+- **SC-007**: Volume changes take audible effect within 200 ms and introduce no audible click, gap, or dropout. **With the tone control bypassed or flat**, audio output is bit-identical to the decoded source apart from level, verified by capture.
+- **SC-015**: A tone control change takes audible effect within 200 ms with no click, gap, or dropout, measured on the device through the Bluetooth PA. Where the platform cannot apply it to the stream being played, the control says so rather than appearing to work.
 - **SC-008**: Displayed words stay within 150 ms of the audio **as heard from the Bluetooth PA speaker** over a full song, including after three seeks.
 - **SC-014**: Suggestions appear for at least 90% of songs played, within 3 seconds of the song starting, and never block or delay playback. No song already performed in the session appears as a suggestion.
 - **SC-009**: A 2-hour continuous session completes with no crash, no audio dropout, and no unbounded growth in memory or storage.
