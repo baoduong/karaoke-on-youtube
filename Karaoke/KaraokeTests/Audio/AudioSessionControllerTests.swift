@@ -26,6 +26,23 @@ struct AudioSessionControllerTests {
         #expect(controller.currentCategory == .playback)
     }
 
+    /// Category options must be empty.
+    ///
+    /// Regression test. `.defaultToSpeaker` was passed alongside `.playback`,
+    /// which is only legal with `.playAndRecord`. A device rejects the whole
+    /// call with OSStatus -50, leaving the session unconfigured and the music
+    /// on the iPhone's own speaker instead of the PA — while the simulator
+    /// accepted it silently and every other test here stayed green.
+    ///
+    /// Asserting the category alone could not catch that; asserting the
+    /// options can, on any platform.
+    @Test("prepare() sets no category options")
+    func prepareSetsNoCategoryOptions() throws {
+        let controller = AudioSessionController()
+        try controller.prepare()
+        #expect(controller.currentCategoryOptions.isEmpty)
+    }
+
     /// Calling prepare() multiple times must not change the category.
     @Test("prepare() is idempotent — category stays .playback")
     func prepareIsIdempotent() throws {

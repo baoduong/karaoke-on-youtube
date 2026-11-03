@@ -44,18 +44,17 @@ final class AudioSessionController: Sendable {
     func prepare() throws(AudioError) {
         let session = AVAudioSession.sharedInstance()
         do {
-            // Category: .playback — the only category used in this app.
-            // Mode: .default — no voice processing, no measurement mode.
-            // Options: .defaultToSpeaker so audio plays from the speaker when
-            //          no external route is connected (not silent through earpiece).
-            //          .allowBluetooth is NOT set — we use .allowBluetoothA2DP
-            //          which keeps the A2DP profile and avoids HFP downgrade.
-            //          .allowBluetoothA2DP is implied by .playback category.
-            try session.setCategory(
-                .playback,
-                mode: .default,
-                options: [.defaultToSpeaker]
-            )
+            // No options. .defaultToSpeaker, .allowBluetoothA2DP and
+            // .allowAirPlay are only accepted with .playAndRecord; passing any
+            // of them alongside .playback makes setCategory fail with
+            // OSStatus -50, leaving the session unconfigured and audio on the
+            // device's own speaker. Measured on an iPhone 16 Pro — the
+            // simulator does not reproduce it.
+            //
+            // .playback already routes to Bluetooth A2DP and AirPlay when a
+            // route is present, which is exactly what this app wants, and
+            // .defaultToSpeaker would have forced the opposite.
+            try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
         } catch {
             throw AudioError.sessionConfigurationFailed(detail: error.localizedDescription)
@@ -82,5 +81,15 @@ final class AudioSessionController: Sendable {
     /// The current session category. Used by T062 to verify the invariant.
     var currentCategory: AVAudioSession.Category {
         AVAudioSession.sharedInstance().category
+    }
+
+    /// The active category options, which must stay empty.
+    ///
+    /// Exposed because the options are where this went wrong once: every
+    /// option worth wanting here belongs to `.playAndRecord`, and the
+    /// simulator accepts them silently while a device rejects the whole call.
+    /// Asserting emptiness catches that on any platform.
+    var currentCategoryOptions: AVAudioSession.CategoryOptions {
+        AVAudioSession.sharedInstance().categoryOptions
     }
 }

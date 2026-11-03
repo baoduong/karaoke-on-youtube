@@ -24,7 +24,23 @@ Three consequences follow, and they reorder the project's priorities:
 2. **A cable would be the single largest quality improvement available** — it removes the re-encode entirely. It is not chosen, by the user's decision, and that is a legitimate trade of fidelity for convenience. It is recorded here so the trade is deliberate rather than accidental.
 3. **Effort should move.** Spike S1 (codec decodability) drops from blocking to merely useful. Spike S5 (route delay compensation) rises to the top, because on a Bluetooth-only design a missing compensation is wrong for every song.
 
-**Verification (Spike S0, replaces S1 as the first spike)**: connect the actual PA speaker, determine which transmission codec the link negotiates, and capture the same song over Bluetooth and over a cable for comparison. The purpose is not to change the decision — the route is fixed — but to size the gap so the app's quality claims stay honest and so the effort allocation above is grounded in a measurement rather than this paragraph.
+### Spike S0 — MEASURED 2026-11-03 **[verified on device]**
+
+iPhone 16 Pro, iOS 26, JBL Flip 6 over Bluetooth, read from `AVAudioSession`:
+
+| Property | Built-in speaker | JBL Flip 6 over Bluetooth |
+|---|---|---|
+| Port type | `Speaker` | **`BluetoothA2DPOutput`** |
+| Sample rate | 48 000 Hz | **44 100 Hz** |
+| Output channels | 2 | **2** |
+| IO buffer | 21.33 ms | 23.22 ms |
+| Reported output latency | 15.4 ms | **112.1 ms** |
+
+**The link negotiates A2DP, not HFP.** iOS exposes no public API naming the transmission codec, so SBC versus AAC cannot be read directly — but the three observable properties settle the question that actually matters. HFP is mono at 8–16 kHz; this route is stereo at 44.1 kHz on an `A2DP` port. The catastrophic case is ruled out.
+
+44.1 kHz is A2DP's native rate, and the source material is 44.1 kHz too, so no resampling is forced by the link. The remaining loss is the re-encode itself, which stands as described above and cannot be measured from inside the app.
+
+**Consequence for effort allocation, now grounded rather than asserted**: the route is healthy A2DP stereo, so the gap between upstream renditions is not being thrown away as badly as the worst case would have it. S1 keeps its lowered priority, but choosing a better rendition is not pointless.
 
 ### Alternatives considered
 
@@ -174,7 +190,17 @@ This also retires two previously-planned spikes. The transposition-quality quest
 
 Because Bluetooth is now the only supported route, this stopped being an edge case. An implementation that omits the subtraction is wrong for every song, with no configuration in which the mistake hides. That promotes S5 to the project's most important measurement.
 
-**Verification (Spike S5)**: play a track with a sharp transient through the actual PA speaker, record video capturing both the screen and the room sound, and measure the gap with and without compensation. Take one wired measurement too — not as a supported route, but as a calibration reference separating link delay from code error.
+### Spike S5 — PARTIALLY MEASURED 2026-11-03 **[verified on device]**
+
+iPhone 16 Pro, JBL Flip 6 over Bluetooth A2DP. `AVAudioSession.outputLatency` **reports 112.1 ms**, against 15.4 ms for the built-in speaker. The Bluetooth link therefore adds roughly **97 ms** over the device's own route.
+
+**This is the number `LyricsTimeline` must subtract** (FR-019). Three things follow:
+
+1. **Uncompensated, the words lead the sound by about 112 ms.** That sits just inside SC-008's 150 ms budget, which is a trap rather than a reprieve: it means a broken implementation can pass a casual look while being visibly wrong to anyone watching closely, and it fails outright on any speaker slower than this one. Treat the margin as absent.
+2. **The value must be read live, not hardcoded.** 112.1 ms is this speaker on this phone. A different speaker will differ, and research.md R4 already notes third-party hardware misreports.
+3. **Reported is not measured.** The remaining half of this spike is the video test, which no API can substitute for.
+
+**Still open — needs a human with a camera**: run RouteProbe's click-and-flash, film the iPhone screen and the room sound together, and read the gap between the white flash and the click. If the filmed gap is close to 112 ms, the system's figure is trustworthy and automatic compensation suffices. If it differs materially, that difference is exactly what FR-020's manual trim exists to cover, and its default should be set from this measurement.
 
 ### Alternatives considered
 

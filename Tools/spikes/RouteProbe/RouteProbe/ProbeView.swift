@@ -37,7 +37,10 @@ final class ProbeModel {
     private func configureSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP, .allowAirPlay])
+            // No options: they are only accepted with .playAndRecord and make
+            // this call fail with OSStatus -50. .playback already routes to
+            // Bluetooth A2DP when a route is present.
+            try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
         } catch {
             log.append("session error: \(error.localizedDescription)")
