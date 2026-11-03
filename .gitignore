@@ -34,6 +34,15 @@ Package.resolved
 Karaoke/Karaoke/Secrets.plist
 *.local.xcconfig
 
+# Exported browser cookies. --cookies-from-browser keeps them in the browser
+# and nothing here ever touches them, but yt-dlp's other option, --cookies
+# FILE, writes a live session to disk. One of those in a commit hands over the
+# account.
+cookies.txt
+cookies*.txt
+*cookies.txt
+*.cookies
+
 # Spec Kit machine-local state
 .specify/feature.json
 .specify/extensions/*/local-config.yml

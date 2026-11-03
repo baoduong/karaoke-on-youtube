@@ -6,7 +6,11 @@
 #   python3 (3.10+)
 #
 # Usage:
-#   ./run.sh [--port 7979] [--host 0.0.0.0]
+#   ./run.sh [--port 7979] [--host 0.0.0.0] [--cookies-from-browser chrome]
+#
+# Cookies are read from the browser at call time and never written anywhere.
+# Do not use yt-dlp's --cookies FILE form here: that puts a live session on
+# disk, next to a git repository. See README before enabling either.
 #
 # The service listens on all interfaces by default so the iPhone can reach it
 # over the local Wi-Fi network. Restrict to 127.0.0.1 if you only want local
