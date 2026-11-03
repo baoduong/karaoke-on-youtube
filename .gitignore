@@ -47,3 +47,9 @@ Tools/spikes/*/[A-Za-z]*.xcodeproj/
 specs/*.MP4
 specs/*.mp4
 specs/*.mov
+
+# Designer concept mockups: low-resolution reference, kept out of the repo.
+# They validated the information architecture; the UI is built from
+# KaraokeTheme and native iOS conventions instead.
+specs/karaoke_ui_concept_screens/
+specs/karaoke_ui_concept_screens.zip
