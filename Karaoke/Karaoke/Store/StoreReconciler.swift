@@ -12,12 +12,10 @@ import SwiftData
 /// **Invariants enforced** (data-model.md Cross-Entity Invariants):
 ///
 /// 1. Every `QueueEntry.songID`, `Favourite.songID`, `SavedSong.songID`, and
-///    `LyricsTrack.songID` resolves to an existing Song. Orphans are deleted.
 ///
 /// 2. A Song is retained if and only if it is referenced by a Favourite, a
 ///    QueueEntry, or a SavedSong. Unreferenced Songs are removed.
 ///
-/// 3. Deleting a Song's last reference deletes its LyricsTrack and, if present,
 ///    its SavedSong file. (Handled by invariant 2's cleanup cascade.)
 ///
 /// 4. No StreamAddress value reaches persistent storage. (Structural — no
@@ -61,7 +59,6 @@ final class StoreReconciler {
         // Pass order matters:
         // 1. Repair orphaned references first so later passes see a consistent set.
         try repairOrphanedReferences()
-        // 2. Remove unreferenced Songs (and cascade their LyricsTracks).
         try removeUnreferencedSongs()
         // 3. Reconcile SavedSong records against the file system.
         try reconcileSavedSongs()
@@ -75,7 +72,6 @@ final class StoreReconciler {
 
     // MARK: - Invariant 1: Repair orphaned references
 
-    /// Deletes QueueEntry, Favourite, SavedSong, and LyricsTrack records whose
     /// `songID` does not resolve to an existing Song (invariant 1).
     private func repairOrphanedReferences() throws {
         let songIDs = try fetchAllSongIDs()
@@ -98,33 +94,20 @@ final class StoreReconciler {
             deleteFileIfExists(relativePath: saved.fileRelativePath)
             context.delete(saved)
         }
-
-        // Orphaned LyricsTracks
-        let lyricsTracks = try context.fetch(FetchDescriptor<LyricsTrack>())
-        for track in lyricsTracks where !songIDs.contains(track.songID) {
-            context.delete(track)
-        }
     }
 
     // MARK: - Invariant 2 & 3: Remove unreferenced Songs
 
     /// Removes Songs not referenced by any Favourite, QueueEntry, or SavedSong,
-    /// and cascades deletion to their LyricsTracks (invariants 2 & 3).
     private func removeUnreferencedSongs() throws {
         // Build the set of referenced song IDs.
         let referencedIDs = try fetchReferencedSongIDs()
 
         let songs = try context.fetch(FetchDescriptor<Song>())
-        let lyricsTracks = try context.fetch(FetchDescriptor<LyricsTrack>())
         let savedSongs = try context.fetch(FetchDescriptor<SavedSong>())
 
         for song in songs where !referencedIDs.contains(song.id) {
             let songID = song.id
-
-            // Cascade: delete the LyricsTrack for this song.
-            for track in lyricsTracks where track.songID == songID {
-                context.delete(track)
-            }
 
             // Cascade: delete the SavedSong file and record.
             for saved in savedSongs where saved.songID == songID {

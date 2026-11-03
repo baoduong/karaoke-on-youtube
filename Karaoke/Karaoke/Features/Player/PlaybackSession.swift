@@ -139,7 +139,11 @@ final class PlaybackSession {
     private(set) var outputRoute: OutputRoute = .unknown
 
     /// The active route's output latency in milliseconds.
-    /// Subtracted when placing lyrics (FR-019).
+    /// The active route's reported output delay.
+    ///
+    /// Retained after the text-lyrics layer was removed because the words are
+    /// now in the video, and the same gap applies: the picture is rendered
+    /// locally while the sound arrives over Bluetooth later.
     private(set) var outputLatencyMs: Double = 0
 
     /// False means audio would play from the device's own speaker — the FR-018 pause trigger.

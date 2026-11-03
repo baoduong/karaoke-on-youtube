@@ -35,9 +35,6 @@ private func makeContext() throws -> ModelContext {
         Favourite.self,
         QueueEntry.self,
         PerformanceSettings.self,
-        LyricsTrack.self,
-        LyricsLine.self,
-        LyricsWord.self,
     ])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: config)

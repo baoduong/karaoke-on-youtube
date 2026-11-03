@@ -1,6 +1,5 @@
 // T082, T132, T135 — SettingsView.
 //
-// T082: Lyrics opt-in toggle (defaults to OFF — no network request until enabled).
 // T132: Link to SigningValidityView (FR-036).
 // T135: Companion service address field and provider-preference control (T134).
 //
@@ -12,7 +11,6 @@ import SwiftData
 struct SettingsView: View {
 
     @Bindable var settings: PerformanceSettings
-    @AppStorage("lyricsProviderEnabled") private var lyricsProviderEnabled: Bool = false
     @AppStorage(CompanionSourceProvider.addressKey) private var companionAddress: String = ""
     @AppStorage("companionPreferred") private var companionPreferred: Bool = false
 
@@ -27,9 +25,7 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                        lyricsSection
-                        displaySection
-                        volumeSection
+                                    volumeSection
                         companionSection
                         appSection
                     }
@@ -46,80 +42,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: 1. Lyrics Section
-
-    private var lyricsSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            SectionHeading(title: "Lyrics")
-
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Toggle("Show Synchronized Lyrics", isOn: $lyricsProviderEnabled)
-                    .tint(Theme.Palette.accent)
-                    .foregroundStyle(Theme.Palette.textPrimary)
-                    .frame(minHeight: Theme.Hit.minimum)
-
-                if lyricsProviderEnabled {
-                    Text("Lyrics are fetched from LRCLIB (lrclib.net) when available. No account required.")
-                        .font(.caption)
-                        .foregroundStyle(Theme.Palette.textSecondary)
-
-                    Divider()
-                        .overlay(Theme.Palette.surfaceRaised)
-
-                    NavigationLink {
-                        LyricsOffsetView(settings: settings)
-                            .navigationTitle("Lyrics Timing")
-                    } label: {
-                        HStack {
-                            Text("Timing Offset")
-                                .foregroundStyle(Theme.Palette.textPrimary)
-                            Spacer()
-                            Text("\(settings.manualLyricsOffsetMs) ms")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(Theme.Palette.textSecondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.Palette.textTertiary)
-                        }
-                        .frame(minHeight: Theme.Hit.minimum)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(Theme.Space.md)
-            .card(Theme.Palette.surface)
-        }
-    }
-
-    // MARK: 2. Display Section
-
-    private var displaySection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            SectionHeading(title: "Display")
-
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                HStack {
-                    Text("Lyrics Font Size")
-                        .foregroundStyle(Theme.Palette.textPrimary)
-                    Spacer()
-                    Text(String(format: "%.1f×", settings.lyricsFontScale))
-                        .foregroundStyle(Theme.Palette.textSecondary)
-                        .monospacedDigit()
-                }
-
-                Slider(
-                    value: $settings.lyricsFontScale,
-                    in: PerformanceSettings.lyricsFontScaleRange
-                )
-                .tint(Theme.Palette.accent)
-                .frame(minHeight: Theme.Hit.minimum)
-            }
-            .padding(Theme.Space.md)
-            .card(Theme.Palette.surface)
-        }
-    }
-
-    // MARK: 3. Volume Section
 
     private var volumeSection: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {

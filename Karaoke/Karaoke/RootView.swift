@@ -19,13 +19,11 @@ struct RootView: View {
     @State private var suggestionsState: SuggestionsState = .idle
     @State private var showQualityDetail = false
     @State private var selectedTab: Int = Self.initialTab
-    @State private var lyrics = LyricsViewModel()
 
     private let modelContext: ModelContext
     private let mediaStore: MediaStore
     private let saveCoordinator: SaveCoordinator
     private let suggestionEngine: BlendedRecommendationEngine
-    private let lyricsProvider: LyricsProvider
     private let companion = CompanionSourceProvider()
 
     @State private var pendingSong: SongMetadata?
@@ -51,12 +49,12 @@ struct RootView: View {
         mediaStore = store
         saveCoordinator = SaveCoordinator(mediaStore: store)
         suggestionEngine = BlendedRecommendationEngine(providers: [
+            UpstreamRelatedStrategy(modelContext: context),
             SameChannelStrategy(modelContext: context),
             CoOccurrenceStrategy(modelContext: context),
             HistoryStrategy(modelContext: context),
             FavouriteStrategy(modelContext: context)
         ])
-        lyricsProvider = LRCLIBProvider()
     }
 
     var body: some View {
@@ -89,9 +87,6 @@ struct RootView: View {
             queueService.restoreOnLaunch()
             runDemoSearchIfRequested()
             await startDemoSongIfRequested()
-        }
-        .onReceive(Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()) { _ in
-            tickLyrics()
         }
     }
 
@@ -169,9 +164,6 @@ struct RootView: View {
                         session.stop()
                     }
 
-                    LyricsView(viewModel: lyrics, fontScale: settings.lyricsFontScale)
-                        .padding(.top, 12)
-
                     SuggestionsView(
                         state: suggestionsState,
                         onAddToQueue: { songID in
@@ -218,7 +210,6 @@ struct RootView: View {
                 await session.play(songID: song.id, rendition: selected)
             }
             await refreshSuggestions(for: song.id)
-            await loadLyrics(for: song)
         } catch {
             DiagnosticLog.recordMechanismError(error, songID: song.id, providerID: router.identifier)
         }
@@ -246,30 +237,6 @@ struct RootView: View {
         suggestionsState = results.isEmpty ? .coldStart : .loaded(results)
     }
 
-    /// Lyrics never block playback: they are fetched after audio has started
-    /// and their absence changes nothing (FR-025d's sibling rule for US3).
-    private func loadLyrics(for song: SongMetadata) async {
-        lyrics.setTrack(nil)
-        let query = LyricsQuery(
-            title: song.title,
-            artist: song.channelName,
-            durationSeconds: song.durationSeconds
-        )
-        let track = try? await lyricsProvider.lyrics(for: query)
-        lyrics.setTrack(track)
-    }
-
-    /// The audio clock is the only clock: the view asks the session for its
-    /// position rather than keeping one, which is how lyric drift is avoided.
-    private func tickLyrics() {
-        lyrics.update(
-            positionSeconds: session.positionSeconds,
-            outputLatencyMs: session.outputLatencyMs,
-            globalOffsetMs: lyrics.track?.globalOffsetMs ?? 0,
-            manualLyricsOffsetMs: settings.manualLyricsOffsetMs
-        )
-    }
-
     /// DEBUG-only initial tab, set with `-uiTab <0-3>` at launch. The
     /// simulator offers no way to tap a tab bar from the command line, so
     /// screenshotting each tab during UI work needs this.
@@ -283,8 +250,7 @@ struct RootView: View {
     }
 
     /// DEBUG-only: run a search given with `-uiDemoSearch <query>`, so the
-    /// result rows can be inspected with real Vietnamese titles rather than
-    /// imagined ones.
+    /// result rows can be inspected with real Vietnamese titles.
     private func runDemoSearchIfRequested() {
         #if DEBUG
         guard let query = UserDefaults.standard.string(forKey: "uiDemoSearch"), !query.isEmpty else { return }

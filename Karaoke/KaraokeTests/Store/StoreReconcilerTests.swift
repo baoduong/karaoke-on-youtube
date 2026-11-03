@@ -29,9 +29,6 @@ struct StoreReconcilerTests {
             Favourite.self,
             QueueEntry.self,
             PerformanceSettings.self,
-            LyricsTrack.self,
-            LyricsLine.self,
-            LyricsWord.self,
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: config)
@@ -116,21 +113,6 @@ struct StoreReconcilerTests {
             #expect(remaining.isEmpty)
         }
 
-        @Test("orphaned LyricsTrack is deleted")
-        @MainActor
-        func orphanedLyricsTrackDeleted() throws {
-            let (context, mediaDir) = try makeTestEnvironment()
-            defer { try? FileManager.default.removeItem(at: mediaDir) }
-
-            let track = LyricsTrack(songID: "orphanID4", source: .lrclib, hasWordTiming: false)
-            context.insert(track)
-
-            let reconciler = StoreReconciler(context: context, mediaDirectoryURL: mediaDir)
-            try reconciler.reconcile()
-
-            let remaining = try context.fetch(FetchDescriptor<LyricsTrack>())
-            #expect(remaining.isEmpty)
-        }
 
         @Test("valid references are preserved")
         @MainActor
@@ -226,23 +208,6 @@ struct StoreReconcilerTests {
             #expect(remaining.count == 1)
         }
 
-        @Test("LyricsTrack is deleted when its Song is removed")
-        @MainActor
-        func lyricsTrackDeletedWithUnreferencedSong() throws {
-            let (context, mediaDir) = try makeTestEnvironment()
-            defer { try? FileManager.default.removeItem(at: mediaDir) }
-
-            let song = insertSong(id: "unreferencedWithLyrics1", context: context)
-            context.insert(LyricsTrack(songID: song.id, source: .lrclib, hasWordTiming: false))
-
-            let reconciler = StoreReconciler(context: context, mediaDirectoryURL: mediaDir)
-            try reconciler.reconcile()
-
-            let remainingSongs = try context.fetch(FetchDescriptor<Song>())
-            #expect(remainingSongs.isEmpty)
-            let remainingTracks = try context.fetch(FetchDescriptor<LyricsTrack>())
-            #expect(remainingTracks.isEmpty)
-        }
     }
 
     // MARK: - Invariant 6: SavedSong file system reconciliation

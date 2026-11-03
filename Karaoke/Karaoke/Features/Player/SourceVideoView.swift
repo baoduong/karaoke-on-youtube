@@ -2,7 +2,7 @@
 //
 // Video display path for sources that carry the words in the image.
 // Most karaoke sources carry the words in the video image — this is the
-// primary display mode, not a fallback (contracts/lyrics-provider.md Scope).
+// the only display mode: the text-lyrics layer was removed.
 //
 // Kept in step with the audio via the playback session's position.
 //
@@ -14,7 +14,6 @@ import AVKit
 /// Displays the video for a karaoke source that carries lyrics in the image.
 ///
 /// This is the primary display for most sources. The synchronized text layer
-/// (LyricsView) is an enhancement layered on top when a provider is enabled.
 struct SourceVideoView: View {
 
     let player: AVPlayer?

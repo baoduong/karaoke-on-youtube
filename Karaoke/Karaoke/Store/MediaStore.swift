@@ -77,9 +77,6 @@ final class MediaStore {
             Favourite.self,
             QueueEntry.self,
             PerformanceSettings.self,
-            LyricsTrack.self,
-            LyricsLine.self,
-            LyricsWord.self,
             SessionLog.self,
         ])
 
@@ -106,9 +103,6 @@ final class MediaStore {
             Favourite.self,
             QueueEntry.self,
             PerformanceSettings.self,
-            LyricsTrack.self,
-            LyricsLine.self,
-            LyricsWord.self,
             SessionLog.self,
         ])
 

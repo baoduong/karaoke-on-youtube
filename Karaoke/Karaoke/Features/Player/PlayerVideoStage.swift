@@ -6,8 +6,7 @@ import SwiftUI
 /// It lives outside the scroll view rather than inside it because on most
 /// karaoke uploads the words are burned into the picture: the video *is* the
 /// lyrics. Letting it scroll away while someone is singing would remove the
-/// thing they are reading. Everything else — controls, text lyrics,
-/// suggestions — scrolls beneath it.
+/// thing they are reading. The controls and suggestions scroll beneath it.
 ///
 /// Edge to edge, with no horizontal padding, so the frame is as large as the
 /// screen allows. The 760pt cap only engages on iPad; on a phone the screen is

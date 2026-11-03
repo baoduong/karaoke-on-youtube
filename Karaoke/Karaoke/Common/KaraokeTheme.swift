@@ -105,7 +105,7 @@ struct SectionHeading: View {
 // MARK: - Empty state
 
 /// Every empty state in the app uses this, so absence looks deliberate rather
-/// than broken. Most songs genuinely have no synchronised lyrics, and a new
+/// than broken. A new install has no history and an unplayed queue is
 /// install genuinely has no history — those are normal, not faults.
 struct EmptyStateView: View {
     let icon: String

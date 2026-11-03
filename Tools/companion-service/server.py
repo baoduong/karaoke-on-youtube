@@ -22,6 +22,8 @@ import json
 import subprocess
 import sys
 import time
+import re
+import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -161,6 +163,160 @@ def metadata(video_id: str) -> dict:
 
 
 MIN_VIDEO_HEIGHT = 720
+
+WATCH_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
+
+
+def related(video_id: str, limit: int = 20) -> dict:
+    """
+    The platform's own "what's next" list for a video.
+
+    There is no public API for this. The web client embeds it in the watch
+    page as `ytInitialData` and pages further results through its private
+    InnerTube endpoint, so the only way to read it is to parse that blob.
+
+    This lives in the service, not in the app, precisely because it will
+    break. YouTube recently moved these entries from `compactVideoRenderer`
+    to `lockupViewModel` — a rename that silently broke every consumer
+    written against the old name. When the next rename lands, fixing it here
+    is a file edit on the user's own machine; fixing it in the app would mean
+    a rebuild and a re-signing by hand.
+    """
+    request = urllib.request.Request(
+        f"https://www.youtube.com/watch?v={video_id}",
+        headers={"User-Agent": WATCH_UA, "Accept-Language": "en-US,en;q=0.9"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            html = response.read().decode("utf-8", errors="ignore")
+    except Exception as exc:
+        raise RuntimeError(f"could not fetch watch page: {exc}")
+
+    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.S)
+    if not match:
+        raise RuntimeError("watch page carries no ytInitialData")
+
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"ytInitialData is not valid JSON: {exc}")
+
+    try:
+        sections = (
+            data["contents"]["twoColumnWatchNextResults"]
+            ["secondaryResults"]["secondaryResults"]["results"]
+        )
+    except (KeyError, TypeError):
+        raise RuntimeError("watch page shape changed: no secondaryResults")
+
+    entries = []
+    for section in sections:
+        entries.extend(section.get("itemSectionRenderer", {}).get("contents", []))
+
+    results = []
+    saw_lockup = False
+    for entry in entries:
+        lockup = entry.get("lockupViewModel")
+        if not lockup or lockup.get("contentType") != "LOCKUP_CONTENT_TYPE_VIDEO":
+            continue
+        saw_lockup = True
+        candidate = _lockup_to_result(lockup, exclude_id=video_id)
+        if candidate:
+            results.append(candidate)
+        if len(results) >= limit:
+            break
+
+    # An empty list after seeing lockups is a legitimate answer; seeing none at
+    # all means the page shape moved again and the parse needs revisiting.
+    if not saw_lockup:
+        raise RuntimeError("watch page shape changed: no lockupViewModel entries")
+
+    return {"results": results}
+
+
+# YouTube's related list for a karaoke upload is mostly not karaoke. A sample
+# of five returned one karaoke track alongside a film review, a news digest and
+# two music compilations. Unfiltered, this strategy would push that in above
+# four local strategies that only ever suggest things the singer can sing.
+_KARAOKE_MARKERS = (
+    "karaoke", "beat", "tone nam", "tone nu", "tone nữ", "karaoke AI",
+    "nhac song", "nhạc sống", "phoi moi", "phối mới", "khong loi", "không lời",
+)
+
+# A backing track runs a few minutes. Anything past this is a compilation, a
+# livestream or a film, none of which belong in a queue.
+_MAX_KARAOKE_SECONDS = 15 * 60
+
+
+def _looks_like_karaoke(title: str, duration: int) -> bool:
+    if duration <= 0 or duration > _MAX_KARAOKE_SECONDS:
+        return False
+    lowered = title.lower()
+    return any(marker in lowered for marker in _KARAOKE_MARKERS)
+
+
+def _lockup_to_result(lockup: dict, exclude_id: str) -> dict | None:
+    video_id = lockup.get("contentId")
+    if not video_id or video_id == exclude_id:
+        return None
+
+    metadata = lockup.get("metadata", {}).get("lockupMetadataViewModel", {})
+    title = metadata.get("title", {}).get("content") or ""
+
+    channel = ""
+    rows = metadata.get("metadata", {}).get("contentMetadataViewModel", {}).get("metadataRows", [])
+    if rows:
+        parts = rows[0].get("metadataParts", [])
+        for part in parts:
+            text = part.get("text", {}).get("content")
+            if text:
+                channel = text
+                break
+
+    duration = _duration_from_overlays(
+        lockup.get("contentImage", {}).get("thumbnailViewModel", {}).get("overlays", [])
+    )
+
+    # Duration is required rather than optional: Song validation rejects a
+    # non-positive value, so an entry without one would be dropped later with
+    # nothing to explain its disappearance.
+    if not title or not duration:
+        return None
+    if not _looks_like_karaoke(title, duration):
+        return None
+
+    return {
+        "id": video_id,
+        "title": title,
+        "channelName": channel or "Unknown",
+        "durationSeconds": duration,
+        "thumbnailURL": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+    }
+
+
+def _duration_from_overlays(overlays: list) -> int:
+    """Reads the duration badge, which carries 'm:ss' or 'h:mm:ss'."""
+    for overlay in overlays:
+        badges = overlay.get("thumbnailBottomOverlayViewModel", {}).get("badges", [])
+        for badge in badges:
+            text = badge.get("thumbnailBadgeViewModel", {}).get("text", "")
+            seconds = _parse_clock(text)
+            if seconds:
+                return seconds
+    return 0
+
+
+def _parse_clock(text: str) -> int:
+    pieces = text.strip().split(":")
+    if not 2 <= len(pieces) <= 3 or not all(p.isdigit() for p in pieces):
+        return 0
+    total = 0
+    for piece in pieces:
+        total = total * 60 + int(piece)
+    return total
 
 
 def hls_manifest(video_id: str, min_height: int = MIN_VIDEO_HEIGHT) -> str:
@@ -389,6 +545,23 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/health":
             self._json(200, {"status": "ok"})
+
+        elif path == "/related":
+            video_id = params.get("id", [None])[0]
+            if not video_id:
+                self._json(400, {"error": "missing id parameter"})
+                return
+            try:
+                limit = int(params.get("limit", ["20"])[0])
+            except ValueError:
+                self._json(400, {"error": "limit must be an integer"})
+                return
+            try:
+                self._json(200, related(video_id, limit))
+            except ContentUnavailable as exc:
+                self._json(404, {"error": exc.detail, "reason": exc.reason})
+            except Exception as exc:
+                self._json(500, {"error": str(exc)})
 
         elif path == "/search":
             query = params.get("q", [None])[0]

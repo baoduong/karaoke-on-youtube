@@ -37,14 +37,20 @@ final class CompanionSourceProvider: SourceProvider, @unchecked Sendable {
     static let addressKey = "companionServiceAddress"
     private let networkTimeout: TimeInterval = 30
 
-    private var baseURL: URL? {
-        guard let raw = UserDefaults.standard.string(forKey: Self.addressKey),
+    /// The configured service address, or nil when none is set.
+    ///
+    /// Static so strategies outside this type can ask whether the companion
+    /// is reachable at all without constructing a provider.
+    static var configuredAddress: URL? {
+        guard let raw = UserDefaults.standard.string(forKey: addressKey),
               !raw.isEmpty,
               let url = URL(string: raw) else {
             return nil
         }
         return url
     }
+
+    private var baseURL: URL? { Self.configuredAddress }
 
     // MARK: SourceProvider — health
 
