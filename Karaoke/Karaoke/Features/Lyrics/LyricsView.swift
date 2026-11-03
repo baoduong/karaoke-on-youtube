@@ -32,7 +32,7 @@ final class LyricsViewModel {
         timeline = newTrack.map { LyricsTimeline(track: $0) }
         previousHint = nil
         currentPosition = LyricsPosition(lineIndex: nil, wordIndex: nil, progressWithinWord: 0)
-        withAnimation(.easeIn(duration: 0.3)) {
+        withAnimation(.easeIn(duration: 0.25)) {
             isVisible = newTrack != nil
         }
     }
@@ -65,6 +65,11 @@ final class LyricsViewModel {
 /// Read-ahead: shows lines before and after the current one so the singer can
 /// prepare. A display showing only the current line is useless for singing
 /// (contracts/lyrics-provider.md Rendering requirements).
+///
+/// Most karaoke uploads burn lyrics directly into the video picture and have no
+/// separate synchronised LRC track. When `track` is nil or has no lines, the
+/// view renders a calm, deliberate `EmptyStateView` card so the absence of
+/// text lyrics reads as the normal case rather than a missing component.
 struct LyricsView: View {
 
     let viewModel: LyricsViewModel
@@ -74,36 +79,73 @@ struct LyricsView: View {
     private static let readBehindLines = 2
 
     var body: some View {
-        if viewModel.isVisible, let track = viewModel.track {
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .center, spacing: 12 * fontScale) {
-                        ForEach(track.lines.indices, id: \.self) { idx in
-                            lineView(
-                                line: track.lines[idx],
-                                isCurrent: viewModel.currentPosition.lineIndex == idx,
-                                isNearby: isNearby(idx: idx),
-                                currentWordIndex: viewModel.currentPosition.lineIndex == idx
-                                    ? viewModel.currentPosition.wordIndex
-                                    : nil
-                            )
-                            .id(idx)
-                        }
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            SectionHeading(title: "Lyrics")
+
+            if viewModel.isVisible, let track = viewModel.track, !track.lines.isEmpty {
+                synchronizedLyricsCard(track: track)
+            } else {
+                noLyricsCard
+            }
+        }
+        .padding(.horizontal, Theme.Space.lg)
+    }
+
+    // MARK: - Synchronized Lyrics Stage
+
+    private func synchronizedLyricsCard(track: LyricsTrackData) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .center, spacing: Theme.Space.md * fontScale) {
+                    ForEach(track.lines.indices, id: \.self) { idx in
+                        let isCurrent = viewModel.currentPosition.lineIndex == idx
+                        lineView(
+                            line: track.lines[idx],
+                            isCurrent: isCurrent,
+                            isNearby: isNearby(idx: idx),
+                            currentWordIndex: isCurrent
+                                ? viewModel.currentPosition.wordIndex
+                                : nil
+                        )
+                        .padding(.horizontal, Theme.Space.md)
+                        .padding(.vertical, isCurrent ? Theme.Space.sm : Theme.Space.xs)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            isCurrent ? Theme.Palette.surfaceRaised : Color.clear,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                        )
+                        .id(idx)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 24)
                 }
-                .onChange(of: viewModel.currentPosition.lineIndex) { _, newIdx in
-                    if let idx = newIdx {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo(idx, anchor: .center)
-                        }
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.vertical, Theme.Space.lg)
+            }
+            .frame(minHeight: 220, maxHeight: 320)
+            .onChange(of: viewModel.currentPosition.lineIndex) { _, newIdx in
+                if let idx = newIdx {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo(idx, anchor: .center)
                     }
                 }
             }
-            .transition(.opacity)
         }
+        .card(Theme.Palette.surface)
+        .transition(.opacity)
     }
+
+    // MARK: - Normal No-Lyrics State
+
+    private var noLyricsCard: some View {
+        EmptyStateView(
+            icon: "music.note.tv",
+            title: "Lyrics are in the video",
+            message: "No separate text track for this song — follow the words on the video stage above."
+        )
+        .frame(maxWidth: .infinity)
+        .card(Theme.Palette.surface)
+    }
+
+    // MARK: - Line Rendering
 
     private func isNearby(idx: Int) -> Bool {
         guard let current = viewModel.currentPosition.lineIndex else { return true }
@@ -121,9 +163,8 @@ struct LyricsView: View {
         if line.words.isEmpty || currentWordIndex == nil {
             // Line-level highlight (the common case — research.md R5).
             Text(line.text.isEmpty ? " " : line.text)
-                .font(.system(size: 24 * fontScale, weight: isCurrent ? .bold : .regular))
-                .foregroundStyle(isCurrent ? Color.primary : Color.secondary)
-                .opacity(isNearby ? 1.0 : 0.4)
+                .font(.system(size: (isCurrent ? 24 : 20) * fontScale, weight: isCurrent ? .bold : .medium))
+                .foregroundStyle(lineColor(isCurrent: isCurrent, isNearby: isNearby))
                 .multilineTextAlignment(.center)
                 .animation(.easeInOut(duration: 0.15), value: isCurrent)
         } else {
@@ -137,21 +178,34 @@ struct LyricsView: View {
         }
     }
 
+    private func lineColor(isCurrent: Bool, isNearby: Bool) -> Color {
+        if isCurrent {
+            return Theme.Palette.accent
+        } else if isNearby {
+            return Theme.Palette.textSecondary
+        } else {
+            return Theme.Palette.textTertiary
+        }
+    }
+
     private func wordHighlightLine(
         line: LyricsLineData,
         currentWordIndex: Int?,
         isCurrent: Bool,
         isNearby: Bool
     ) -> some View {
-        FlowLayout(spacing: 4 * fontScale) {
+        FlowLayout(spacing: 5 * fontScale) {
             ForEach(line.words.indices, id: \.self) { wi in
                 let word = line.words[wi]
                 let isCurrentWord = currentWordIndex == wi
                 Text(word.text)
-                    .font(.system(size: 24 * fontScale, weight: isCurrentWord ? .bold : .regular))
-                    .foregroundStyle(isCurrentWord ? Color.accentColor : (isCurrent ? Color.primary : Color.secondary))
-                    .opacity(isNearby ? 1.0 : 0.4)
-                    .animation(.easeInOut(duration: 0.1), value: isCurrentWord)
+                    .font(.system(size: (isCurrent ? 24 : 20) * fontScale, weight: isCurrentWord ? .bold : (isCurrent ? .semibold : .medium)))
+                    .foregroundStyle(
+                        isCurrentWord
+                            ? Theme.Palette.accent
+                            : (isCurrent ? Theme.Palette.textPrimary : lineColor(isCurrent: false, isNearby: isNearby))
+                    )
+                    .animation(.easeInOut(duration: 0.12), value: isCurrentWord)
             }
         }
     }

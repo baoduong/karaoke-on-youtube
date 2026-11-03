@@ -29,42 +29,68 @@ struct QueueView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Theme.Palette.background.ignoresSafeArea()
+
                 if service.entries.isEmpty {
-                    emptyState
+                    EmptyStateView(
+                        icon: "music.note.list",
+                        title: "Queue is empty",
+                        message: "Add songs from search results to build your set list."
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     queueList
                 }
             }
             .navigationTitle("Queue")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Theme.Palette.background, for: .navigationBar)
+            .toolbar {
+                if !service.waiting.isEmpty {
+                    EditButton()
+                        .tint(Theme.Palette.accent)
+                }
+            }
         }
     }
 
     // MARK: - Subviews
 
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "Queue is empty",
-            systemImage: "music.note.list",
-            description: Text("Add songs from search results to build your set list.")
-        )
-    }
-
     private var queueList: some View {
         List {
             // Current entry — shown separately, cannot be reordered.
             if let current = service.current {
-                Section("Now Playing") {
+                Section {
                     QueueRowView(entry: current, context: context)
-                        .listRowBackground(Color.accentColor.opacity(0.08))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(
+                            top: Theme.Space.xs,
+                            leading: Theme.Space.lg,
+                            bottom: Theme.Space.xs,
+                            trailing: Theme.Space.lg
+                        ))
+                } header: {
+                    SectionHeading(title: "Now Playing")
+                        .textCase(nil)
+                        .padding(.bottom, Theme.Space.xs)
                 }
             }
 
             // Waiting entries — drag-to-reorder and swipe-to-remove.
             if !service.waiting.isEmpty {
-                Section("Up Next") {
+                Section {
                     ForEach(service.waiting, id: \.id) { entry in
                         QueueRowView(entry: entry, context: context)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(
+                                top: Theme.Space.xs,
+                                leading: Theme.Space.lg,
+                                bottom: Theme.Space.xs,
+                                trailing: Theme.Space.lg
+                            ))
                     }
                     .onMove { source, destination in
                         service.move(fromOffsets: source, toOffset: destination)
@@ -75,6 +101,13 @@ struct QueueView: View {
                             service.remove(id: waitingEntries[index].id)
                         }
                     }
+                } header: {
+                    SectionHeading(
+                        title: "Up Next",
+                        trailing: "\(service.waiting.count)"
+                    )
+                    .textCase(nil)
+                    .padding(.bottom, Theme.Space.xs)
                 }
             }
 
@@ -83,18 +116,28 @@ struct QueueView: View {
                 $0.state == .played || $0.state == .skipped || $0.state == .failed
             }
             if !history.isEmpty {
-                Section("History") {
+                Section {
                     ForEach(history, id: \.id) { entry in
                         QueueRowView(entry: entry, context: context)
-                            .foregroundStyle(.secondary)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(
+                                top: Theme.Space.xs,
+                                leading: Theme.Space.lg,
+                                bottom: Theme.Space.xs,
+                                trailing: Theme.Space.lg
+                            ))
                     }
+                } header: {
+                    SectionHeading(title: "History")
+                        .textCase(nil)
+                        .padding(.bottom, Theme.Space.xs)
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .toolbar {
-            EditButton()
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.Palette.background)
     }
 }
 
@@ -102,35 +145,157 @@ struct QueueView: View {
 
 /// A single row in the queue list.
 ///
-/// Looks up the Song by `songID` to display title, channel, and duration.
-/// Falls back to the raw `songID` when the Song is not in the local store
-/// (should not happen in normal operation — StoreReconciler repairs orphans
-/// at launch, data-model invariant 1).
+/// The five entry states use distinct surface treatments, badges, and opacity
+/// so a singer glancing from across the room can tell what is playing now,
+/// what is queued, what already played or was skipped, and what failed to load.
 private struct QueueRowView: View {
 
     let entry: QueueEntry
     let context: ModelContext
 
+    private var isDimmed: Bool {
+        entry.state == .played || entry.state == .skipped
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.md) {
             stateIcon
-            VStack(alignment: .leading, spacing: 2) {
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(songTitle)
-                    .font(.body)
-                    .lineLimit(1)
-                Text(songSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .font(entry.state == .current ? .body.weight(.semibold) : .body.weight(.medium))
+                    .foregroundStyle(titleColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: Theme.Space.sm) {
+                    if let badge = stateBadgeText {
+                        Text(badge)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(badgeForegroundColor)
+                            .padding(.horizontal, Theme.Space.sm)
+                            .padding(.vertical, 2)
+                            .background(badgeBackgroundColor, in: Capsule())
+                    }
+
+                    if !songSubtitle.isEmpty {
+                        Text(songSubtitle)
+                            .lineLimit(1)
+                    }
+
+                    if let seconds = song?.durationSeconds {
+                        if !songSubtitle.isEmpty {
+                            Text("·")
+                        }
+                        Text(seconds.asDurationLabel)
+                            .monospacedDigit()
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(subtitleColor)
             }
-            Spacer()
-            if let duration = songDuration {
-                Text(duration)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
+
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(Theme.Space.md)
+        .frame(minHeight: Theme.Hit.control)
+        .card(cardColor)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: entry.state == .current || entry.state == .failed ? 1.5 : 0)
+        )
+        .opacity(isDimmed ? 0.52 : 1.0)
+    }
+
+    // MARK: - Visual Styling per State
+
+    private var cardColor: Color {
+        switch entry.state {
+        case .current:
+            return Theme.Palette.surfaceRaised
+        case .waiting, .played, .skipped, .failed:
+            return Theme.Palette.surface
+        }
+    }
+
+    private var borderColor: Color {
+        switch entry.state {
+        case .current:
+            return Theme.Palette.accent
+        case .failed:
+            return Theme.Palette.mechanismIssue.opacity(0.6)
+        case .waiting, .played, .skipped:
+            return .clear
+        }
+    }
+
+    private var titleColor: Color {
+        switch entry.state {
+        case .current:
+            return Theme.Palette.accent
+        case .waiting:
+            return Theme.Palette.textPrimary
+        case .played, .skipped:
+            return Theme.Palette.textSecondary
+        case .failed:
+            return Theme.Palette.mechanismIssue
+        }
+    }
+
+    private var subtitleColor: Color {
+        switch entry.state {
+        case .current, .waiting:
+            return Theme.Palette.textSecondary
+        case .played, .skipped:
+            return Theme.Palette.textTertiary
+        case .failed:
+            return Theme.Palette.mechanismIssue.opacity(0.85)
+        }
+    }
+
+    private var stateBadgeText: String? {
+        switch entry.state {
+        case .current:
+            return "NOW PLAYING"
+        case .waiting:
+            return nil
+        case .played:
+            return "Played"
+        case .skipped:
+            return "Skipped"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private var badgeForegroundColor: Color {
+        switch entry.state {
+        case .current:
+            return .black
+        case .waiting:
+            return Theme.Palette.textSecondary
+        case .played:
+            return Theme.Palette.success
+        case .skipped:
+            return Theme.Palette.textSecondary
+        case .failed:
+            return Theme.Palette.mechanismIssue
+        }
+    }
+
+    private var badgeBackgroundColor: Color {
+        switch entry.state {
+        case .current:
+            return Theme.Palette.accent
+        case .waiting:
+            return Theme.Palette.surfaceRaised
+        case .played:
+            return Theme.Palette.success.opacity(0.16)
+        case .skipped:
+            return Theme.Palette.surfaceRaised
+        case .failed:
+            return Theme.Palette.mechanismIssue.opacity(0.18)
+        }
     }
 
     // MARK: - Song lookup
@@ -152,42 +317,47 @@ private struct QueueRowView: View {
         song?.channelName ?? ""
     }
 
-    private var songDuration: String? {
-        guard let seconds = song?.durationSeconds else { return nil }
-        return formatDuration(seconds)
-    }
-
     // MARK: - State icon
 
     private var stateIcon: some View {
-        Group {
-            switch entry.state {
-            case .current:
-                Image(systemName: "speaker.wave.2.fill")
-                    .foregroundStyle(Color.accentColor)
-            case .waiting:
-                Image(systemName: "music.note")
-                    .foregroundStyle(.secondary)
-            case .played:
-                Image(systemName: "checkmark.circle")
-                    .foregroundStyle(.green)
-            case .skipped:
-                Image(systemName: "forward.fill")
-                    .foregroundStyle(.secondary)
-            case .failed:
-                Image(systemName: "exclamationmark.circle")
-                    .foregroundStyle(.red)
+        ZStack {
+            Circle()
+                .fill(iconCircleColor)
+                .frame(width: 36, height: 36)
+
+            Group {
+                switch entry.state {
+                case .current:
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(.black)
+                case .waiting:
+                    Image(systemName: "music.note")
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                case .played:
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Theme.Palette.success)
+                case .skipped:
+                    Image(systemName: "forward.fill")
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Theme.Palette.mechanismIssue)
+                }
             }
+            .font(.subheadline.weight(.semibold))
         }
-        .imageScale(.medium)
-        .frame(width: 24)
     }
 
-    // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let minutes = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", minutes, secs)
+    private var iconCircleColor: Color {
+        switch entry.state {
+        case .current:
+            return Theme.Palette.accent
+        case .waiting, .skipped:
+            return Theme.Palette.surfaceRaised
+        case .played:
+            return Theme.Palette.success.opacity(0.16)
+        case .failed:
+            return Theme.Palette.mechanismIssue.opacity(0.18)
+        }
     }
 }

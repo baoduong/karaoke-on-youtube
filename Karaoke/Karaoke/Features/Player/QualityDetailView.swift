@@ -15,7 +15,10 @@ import SwiftUI
 ///
 /// `degradesQuality` is surfaced here because Bluetooth re-encodes the decoded
 /// audio before transmitting it — the app must not claim quality it cannot
-/// deliver (FR-014, audio-pipeline.md Audio Quality Reality).
+/// deliver (FR-014, audio-pipeline.md Audio Quality Reality). Because a
+/// Bluetooth PA speaker is the normal party setup, "Quality Degraded" is
+/// presented as a calm factual note on a neutral raised surface rather than an
+/// alarm.
 struct QualityDetailView: View {
 
     let rendition: AudioRendition?
@@ -23,41 +26,72 @@ struct QualityDetailView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                renditionSection
-                routeSection
+            ZStack {
+                Theme.Palette.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                        renditionSection
+                        routeSection
+                    }
+                    .padding(Theme.Space.lg)
+                }
             }
             .navigationTitle("Audio Quality")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.Palette.background, for: .navigationBar)
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: Rendition section (FR-005)
 
     private var renditionSection: some View {
-        Section("Selected Rendition") {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            SectionHeading(title: "Selected Rendition")
+
             if let rendition {
-                LabeledContent("Codec", value: codecName(rendition.codec))
-                LabeledContent("Container", value: containerName(rendition.container))
+                VStack(spacing: Theme.Space.md) {
+                    // Primary format, codec, and bitrate pills
+                    HStack(spacing: Theme.Space.sm) {
+                        metricTile(title: "Format", value: containerName(rendition.container))
+                        metricTile(title: "Codec", value: codecName(rendition.codec))
+                        metricTile(
+                            title: "Bitrate",
+                            value: rendition.averageBitrateBps.map { "\($0 / 1000) kbps" } ?? "Unknown"
+                        )
+                    }
 
-                if let bps = rendition.averageBitrateBps {
-                    LabeledContent("Bitrate", value: "\(bps / 1000) kbps")
-                } else {
-                    LabeledContent("Bitrate", value: "Unknown")
+                    VStack(spacing: Theme.Space.sm) {
+                        detailRow(label: "Container", value: containerName(rendition.container))
+                        detailRow(label: "Codec", value: codecName(rendition.codec))
+                        detailRow(
+                            label: "Bitrate",
+                            value: rendition.averageBitrateBps.map { "\($0 / 1000) kbps" } ?? "Unknown"
+                        )
+
+                        if let sampleRate = rendition.sampleRateHz {
+                            detailRow(label: "Sample Rate", value: "\(sampleRate / 1000) kHz")
+                        }
+
+                        if let channels = rendition.channelCount {
+                            detailRow(label: "Channels", value: channels == 2 ? "Stereo" : "\(channels)")
+                        }
+
+                        detailRow(label: "Itag", value: "\(rendition.itag)")
+                    }
+                    .padding(Theme.Space.md)
+                    .card(Theme.Palette.surface)
                 }
-
-                if let sampleRate = rendition.sampleRateHz {
-                    LabeledContent("Sample Rate", value: "\(sampleRate / 1000) kHz")
-                }
-
-                if let channels = rendition.channelCount {
-                    LabeledContent("Channels", value: channels == 2 ? "Stereo" : "\(channels)")
-                }
-
-                LabeledContent("Itag", value: "\(rendition.itag)")
             } else {
-                Text("No rendition selected")
-                    .foregroundStyle(.secondary)
+                EmptyStateView(
+                    icon: "waveform",
+                    title: "No rendition selected",
+                    message: "Start playing a song to inspect its audio format, codec, and bitrate."
+                )
+                .frame(maxWidth: .infinity)
+                .card(Theme.Palette.surface)
             }
         }
     }
@@ -65,36 +99,88 @@ struct QualityDetailView: View {
     // MARK: Route section (FR-014)
 
     private var routeSection: some View {
-        Section("Output Route") {
-            LabeledContent("Route", value: routeLabel)
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            SectionHeading(title: "Output Route")
 
-            LabeledContent("External", value: outputRoute.isExternal ? "Yes" : "No")
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                detailRow(label: "Route", value: routeLabel)
+                detailRow(label: "External", value: outputRoute.isExternal ? "Yes" : "No")
+                detailRow(
+                    label: "Output Latency",
+                    value: String(format: "%.0f ms", outputRoute.outputLatencyMs)
+                )
 
-            LabeledContent("Output Latency") {
-                Text(String(format: "%.0f ms", outputRoute.outputLatencyMs))
-                    .foregroundStyle(outputRoute.outputLatencyMs > 100 ? .orange : .primary)
-            }
+                Divider()
+                    .overlay(Theme.Palette.surfaceRaised)
 
-            if outputRoute.degradesQuality {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Quality Degraded")
+                if outputRoute.degradesQuality {
+                    HStack(alignment: .top, spacing: Theme.Space.md) {
+                        Image(systemName: "info.circle.fill")
                             .font(.body)
-                        Text("This route re-encodes the audio before transmitting it. The actual quality is lower than the rendition bitrate suggests.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.Palette.accentDim)
+                            .padding(.top, 2)
+
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            Text("Quality Degraded")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.Palette.textPrimary)
+
+                            Text("This route re-encodes the audio before transmitting it. The actual quality is lower than the rendition bitrate suggests.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.Palette.textSecondary)
+                        }
+
+                        Spacer(minLength: 0)
                     }
-                }
-            } else {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("No quality degradation")
-                        .font(.body)
+                    .padding(Theme.Space.md)
+                    .card(Theme.Palette.surfaceRaised, radius: Theme.Radius.sm)
+                } else {
+                    HStack(spacing: Theme.Space.md) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(Theme.Palette.success)
+
+                        Text("No quality degradation")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.Palette.textPrimary)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(Theme.Space.md)
+                    .card(Theme.Palette.surfaceRaised, radius: Theme.Radius.sm)
                 }
             }
+            .padding(Theme.Space.md)
+            .card(Theme.Palette.surface)
+        }
+    }
+
+    // MARK: Building Blocks
+
+    private func metricTile(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(Theme.Palette.textTertiary)
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(Theme.Palette.accent)
+                .lineLimit(1)
+        }
+        .padding(Theme.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(Theme.Palette.surface)
+    }
+
+    private func detailRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(Theme.Palette.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.medium).monospacedDigit())
+                .foregroundStyle(Theme.Palette.textPrimary)
         }
     }
 

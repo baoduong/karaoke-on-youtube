@@ -1,7 +1,8 @@
 // T117 — LibraryView.
 //
 // Lists favourites newest first (data-model.md Favourite: "Default sort order
-// is newest first").
+// is newest first") and provides card-styled navigation rows for Favourites
+// and Saved for offline.
 //
 // FR-027: favourites survive app restart.
 
@@ -10,11 +11,15 @@ import SwiftData
 
 // MARK: - LibraryView
 
-/// Displays the singer's favourites, newest first.
+/// Displays the library hub ("Favourites" and "Saved for offline" navigation cards
+/// with counts) alongside the singer's favourites list, newest first.
 ///
-/// Each row shows title, channel, and duration. A swipe-to-unfavourite action
-/// removes the entry. The view is driven by `FavouritesService` which owns the
-/// sort order and persistence.
+/// `RootView` hosts `LibraryView` inside a `NavigationLink("Favourites")` on the
+/// Library tab without touching `RootView.swift`. Surfacing both collection cards
+/// ("Favourites" and "Saved for offline") at the top of `LibraryView` alongside the
+/// favourites list satisfies the card-styled navigation requirement while preserving
+/// the existing `(favouritesService:queueService:)` initializer and full favourites
+/// management (enqueue, remove, swipe actions).
 struct LibraryView: View {
 
     // MARK: - Dependencies
@@ -24,49 +29,215 @@ struct LibraryView: View {
 
     @Environment(\.modelContext) private var context
 
+    @Query(sort: \SavedSong.savedAt, order: .reverse)
+    private var savedSongs: [SavedSong]
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            Group {
-                if favouritesService.favourites.isEmpty {
-                    emptyState
-                } else {
-                    favouritesList
+            ZStack {
+                Theme.Palette.background.ignoresSafeArea()
+
+                List {
+                    Section {
+                        collectionsSection
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(
+                                top: Theme.Space.xs,
+                                leading: Theme.Space.lg,
+                                bottom: Theme.Space.md,
+                                trailing: Theme.Space.lg
+                            ))
+                    }
+
+                    Section {
+                        if favouritesService.favourites.isEmpty {
+                            EmptyStateView(
+                                icon: "heart",
+                                title: "No favourites yet",
+                                message: "Mark songs as favourites to find them here quickly."
+                            )
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(favouritesService.favourites, id: \.songID) { favourite in
+                                FavouriteRowView(
+                                    favourite: favourite,
+                                    context: context,
+                                    onAddToQueue: { queueService.enqueue(songID: favourite.songID) },
+                                    onRemove: { favouritesService.remove(songID: favourite.songID) }
+                                )
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(
+                                    top: Theme.Space.xs,
+                                    leading: Theme.Space.lg,
+                                    bottom: Theme.Space.xs,
+                                    trailing: Theme.Space.lg
+                                ))
+                            }
+                            .onDelete { offsets in
+                                let items = favouritesService.favourites
+                                for index in offsets {
+                                    favouritesService.remove(songID: items[index].songID)
+                                }
+                            }
+                        }
+                    } header: {
+                        SectionHeading(
+                            title: "Favourites",
+                            trailing: "\(favouritesService.favourites.count)"
+                        )
+                        .textCase(nil)
+                        .padding(.bottom, Theme.Space.xs)
+                    }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.Palette.background)
             }
             .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Theme.Palette.background, for: .navigationBar)
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Collections Navigation Cards
 
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "No favourites yet",
-            systemImage: "heart",
-            description: Text("Mark songs as favourites to find them here quickly.")
-        )
-    }
-
-    private var favouritesList: some View {
-        List {
-            ForEach(favouritesService.favourites, id: \.songID) { favourite in
-                FavouriteRowView(
-                    favourite: favourite,
-                    context: context,
-                    onAddToQueue: { queueService.enqueue(songID: favourite.songID) },
-                    onRemove: { favouritesService.remove(songID: favourite.songID) }
+    private var collectionsSection: some View {
+        VStack(spacing: Theme.Space.sm) {
+            NavigationLink {
+                FavouritesDetailListView(
+                    favouritesService: favouritesService,
+                    queueService: queueService
+                )
+            } label: {
+                LibraryCollectionRow(
+                    icon: "heart.fill",
+                    iconColor: Theme.Palette.accent,
+                    title: "Favourites",
+                    count: favouritesService.favourites.count
                 )
             }
-            .onDelete { offsets in
-                let items = favouritesService.favourites
-                for index in offsets {
-                    favouritesService.remove(songID: items[index].songID)
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                SavedSongsView(
+                    mediaStore: MediaStore.shared,
+                    coordinator: SaveCoordinator(mediaStore: MediaStore.shared)
+                )
+            } label: {
+                LibraryCollectionRow(
+                    icon: "arrow.down.circle.fill",
+                    iconColor: Theme.Palette.success,
+                    title: "Saved for offline",
+                    count: savedSongs.count
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - LibraryCollectionRow
+
+private struct LibraryCollectionRow: View {
+
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: Theme.Space.md) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                    .fill(iconColor.opacity(0.16))
+                    .frame(width: 40, height: 40)
+
+                Image(systemName: icon)
+                    .font(.headline)
+                    .foregroundStyle(iconColor)
+            }
+
+            Text(title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.Palette.textPrimary)
+
+            Spacer()
+
+            Text("\(count)")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(Theme.Palette.textSecondary)
+                .padding(.horizontal, Theme.Space.sm)
+                .padding(.vertical, Theme.Space.xs)
+                .background(Theme.Palette.surfaceRaised, in: Capsule())
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.Palette.textTertiary)
+        }
+        .padding(Theme.Space.md)
+        .frame(minHeight: Theme.Hit.control)
+        .card(Theme.Palette.surface)
+    }
+}
+
+// MARK: - FavouritesDetailListView
+
+private struct FavouritesDetailListView: View {
+
+    @Bindable var favouritesService: FavouritesService
+    var queueService: QueueService
+
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        ZStack {
+            Theme.Palette.background.ignoresSafeArea()
+
+            if favouritesService.favourites.isEmpty {
+                EmptyStateView(
+                    icon: "heart",
+                    title: "No favourites yet",
+                    message: "Mark songs as favourites to find them here quickly."
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(favouritesService.favourites, id: \.songID) { favourite in
+                        FavouriteRowView(
+                            favourite: favourite,
+                            context: context,
+                            onAddToQueue: { queueService.enqueue(songID: favourite.songID) },
+                            onRemove: { favouritesService.remove(songID: favourite.songID) }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(
+                            top: Theme.Space.xs,
+                            leading: Theme.Space.lg,
+                            bottom: Theme.Space.xs,
+                            trailing: Theme.Space.lg
+                        ))
+                    }
+                    .onDelete { offsets in
+                        let items = favouritesService.favourites
+                        for index in offsets {
+                            favouritesService.remove(songID: items[index].songID)
+                        }
+                    }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Theme.Palette.background)
             }
         }
-        .listStyle(.insetGrouped)
+        .navigationTitle("Favourites")
+        .toolbarBackground(Theme.Palette.background, for: .navigationBar)
     }
 }
 
@@ -74,7 +245,9 @@ struct LibraryView: View {
 
 /// A single row in the favourites list.
 ///
-/// Looks up the Song by `songID` to display title, channel, and duration.
+/// Looks up the Song by `songID` to display title (up to 2 lines for Vietnamese
+/// karaoke titles), channel, and duration, with large one-handed action buttons
+/// plus swipe actions.
 private struct FavouriteRowView: View {
 
     let favourite: Favourite
@@ -83,31 +256,52 @@ private struct FavouriteRowView: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.md) {
             Image(systemName: "heart.fill")
-                .foregroundStyle(.red)
-                .imageScale(.medium)
-                .frame(width: 24)
+                .font(.subheadline)
+                .foregroundStyle(Theme.Palette.accent)
+                .frame(width: 32, height: 32)
+                .background(Theme.Palette.accent.opacity(0.14), in: Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(songTitle)
-                    .font(.body)
-                    .lineLimit(1)
-                Text(songSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Theme.Palette.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: Theme.Space.sm) {
+                    if !songSubtitle.isEmpty {
+                        Text(songSubtitle)
+                            .lineLimit(1)
+                    }
+                    if let seconds = song?.durationSeconds {
+                        if !songSubtitle.isEmpty {
+                            Text("·")
+                        }
+                        Text(seconds.asDurationLabel)
+                            .monospacedDigit()
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(Theme.Palette.textSecondary)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            if let duration = songDuration {
-                Text(duration)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+            Button(action: onAddToQueue) {
+                Image(systemName: "text.badge.plus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.accent)
+                    .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
+                    .background(Theme.Palette.surfaceRaised, in: Circle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add to Queue")
         }
-        .padding(.vertical, 2)
+        .padding(Theme.Space.md)
+        .frame(minHeight: Theme.Hit.control)
+        .card()
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onRemove()
@@ -121,7 +315,7 @@ private struct FavouriteRowView: View {
             } label: {
                 Label("Add to Queue", systemImage: "plus.circle")
             }
-            .tint(.accentColor)
+            .tint(Theme.Palette.accent)
         }
     }
 
@@ -142,18 +336,5 @@ private struct FavouriteRowView: View {
 
     private var songSubtitle: String {
         song?.channelName ?? ""
-    }
-
-    private var songDuration: String? {
-        guard let seconds = song?.durationSeconds else { return nil }
-        return formatDuration(seconds)
-    }
-
-    // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let minutes = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", minutes, secs)
     }
 }

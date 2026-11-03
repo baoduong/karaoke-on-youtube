@@ -41,7 +41,9 @@ struct SavedSongsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Theme.Palette.background.ignoresSafeArea()
+
                 if savedSongs.isEmpty {
                     emptyState
                 } else {
@@ -49,6 +51,8 @@ struct SavedSongsView: View {
                 }
             }
             .navigationTitle("Saved Songs")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Theme.Palette.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     storageLabel
@@ -83,17 +87,42 @@ struct SavedSongsView: View {
     // MARK: - Subviews
 
     private var emptyState: some View {
-        ContentUnavailableView(
-            "No Saved Songs",
-            systemImage: "arrow.down.circle",
-            description: Text("Save songs while connected so you can sing without the network.")
+        EmptyStateView(
+            icon: "arrow.down.circle",
+            title: "No Saved Songs",
+            message: "Save songs while connected so you can sing without the network."
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var songList: some View {
         List {
-            ForEach(savedSongs, id: \.songID) { saved in
-                SavedSongRow(saved: saved)
+            Section {
+                storageSummaryCard
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(
+                        top: Theme.Space.xs,
+                        leading: Theme.Space.lg,
+                        bottom: Theme.Space.md,
+                        trailing: Theme.Space.lg
+                    ))
+            }
+
+            Section {
+                ForEach(savedSongs, id: \.songID) { saved in
+                    SavedSongRow(saved: saved) {
+                        songToDelete = saved
+                        showDeleteConfirmation = true
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(
+                        top: Theme.Space.xs,
+                        leading: Theme.Space.lg,
+                        bottom: Theme.Space.xs,
+                        trailing: Theme.Space.lg
+                    ))
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             songToDelete = saved
@@ -102,19 +131,61 @@ struct SavedSongsView: View {
                             Label("Remove", systemImage: "trash")
                         }
                     }
+                }
+            } header: {
+                SectionHeading(
+                    title: "Saved for offline",
+                    trailing: "\(savedSongs.count)"
+                )
+                .textCase(nil)
+                .padding(.bottom, Theme.Space.xs)
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.Palette.background)
+    }
+
+    private var storageSummaryCard: some View {
+        HStack(spacing: Theme.Space.md) {
+            Image(systemName: "internaldrive.fill")
+                .font(.title3)
+                .foregroundStyle(Theme.Palette.accent)
+                .frame(width: 40, height: 40)
+                .background(Theme.Palette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text("Total Storage Used")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Palette.textSecondary)
+                Text(totalStorageText)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Theme.Palette.textPrimary)
+            }
+
+            Spacer()
+        }
+        .padding(Theme.Space.md)
+        .card(Theme.Palette.surface)
+    }
+
+    private var totalStorageText: String {
+        if let report = try? mediaStore.storageReport(context: modelContext) {
+            return formatBytes(report.completedBytes)
+        }
+        let fallbackBytes = savedSongs
+            .filter { $0.state == .complete }
+            .reduce(Int64(0)) { $0 + $1.byteSize }
+        return formatBytes(fallbackBytes)
     }
 
     private var storageLabel: some View {
-        Group {
-            if let report = try? mediaStore.storageReport(context: modelContext) {
-                Text(formatBytes(report.completedBytes))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
+        Text(totalStorageText)
+            .font(.caption.weight(.medium).monospacedDigit())
+            .foregroundStyle(Theme.Palette.textSecondary)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, Theme.Space.xs)
+            .background(Theme.Palette.surface, in: Capsule())
     }
 
     // MARK: - Actions
@@ -156,37 +227,68 @@ struct SavedSongsView: View {
 
 // MARK: - SavedSongRow
 
-/// A single row showing a saved song's title, size, and download progress.
+/// A single row showing a saved song's title, size, download progress, and delete action.
 private struct SavedSongRow: View {
 
     let saved: SavedSong
+    var onDelete: () -> Void
 
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            HStack(spacing: Theme.Space.md) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(songTitle)
-                        .font(.body)
-                        .lineLimit(1)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(saved.state == .failed ? Theme.Palette.mechanismIssue : Theme.Palette.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
-                    Text(channelName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HStack(spacing: Theme.Space.sm) {
+                        if !channelName.isEmpty {
+                            Text(channelName)
+                                .lineLimit(1)
+                            Text("·")
+                        }
+                        stateIndicator
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Palette.textSecondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                stateIndicator
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                        .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
+                        .background(Theme.Palette.surfaceRaised, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove")
             }
 
             if saved.state == .downloading {
                 downloadProgress
+            } else if saved.state == .failed, let error = saved.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(Theme.Palette.mechanismIssue)
+                    .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .padding(Theme.Space.md)
+        .frame(minHeight: Theme.Hit.control)
+        .card(Theme.Palette.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .strokeBorder(
+                    saved.state == .failed ? Theme.Palette.mechanismIssue.opacity(0.6) : .clear,
+                    lineWidth: saved.state == .failed ? 1.5 : 0
+                )
+        )
     }
 
     // MARK: - Subviews
@@ -195,53 +297,68 @@ private struct SavedSongRow: View {
     private var stateIndicator: some View {
         switch saved.state {
         case .complete:
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Theme.Palette.success)
                 Text(formatBytes(saved.byteSize))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Palette.textSecondary)
             }
+            .font(.caption.weight(.medium))
 
         case .downloading:
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.blue)
-                Text(formatBytes(saved.downloadedBytes))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Palette.accent)
+                Text(sizeProgressLabel)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Palette.textSecondary)
             }
+            .font(.caption.weight(.medium))
 
         case .pending:
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 ProgressView()
+                    .tint(Theme.Palette.accent)
                     .scaleEffect(0.7)
                 Text("Waiting…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Palette.textSecondary)
             }
+            .font(.caption.weight(.medium))
 
         case .failed:
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.Palette.mechanismIssue)
                 Text("Failed")
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.Palette.mechanismIssue)
+                if saved.byteSize > 0 {
+                    Text("· \(formatBytes(saved.byteSize))")
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.Palette.textTertiary)
+                }
             }
+            .font(.caption.weight(.semibold))
         }
     }
 
+    private var sizeProgressLabel: String {
+        if saved.byteSize > 0 {
+            return "\(formatBytes(saved.downloadedBytes)) / \(formatBytes(saved.byteSize))"
+        }
+        return formatBytes(saved.downloadedBytes)
+    }
+
     private var downloadProgress: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ProgressView(value: progressFraction)
                 .progressViewStyle(.linear)
-                .tint(.blue)
+                .tint(Theme.Palette.accent)
 
             if let error = saved.lastError {
                 Text(error)
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.Palette.mechanismIssue)
                     .lineLimit(2)
             }
         }
@@ -251,7 +368,7 @@ private struct SavedSongRow: View {
 
     private var progressFraction: Double {
         guard saved.byteSize > 0 else { return 0 }
-        return Double(saved.downloadedBytes) / Double(saved.byteSize)
+        return min(1.0, max(0.0, Double(saved.downloadedBytes) / Double(saved.byteSize)))
     }
 
     private var songTitle: String {
