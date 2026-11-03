@@ -200,7 +200,33 @@ iPhone 16 Pro, JBL Flip 6 over Bluetooth A2DP. `AVAudioSession.outputLatency` **
 2. **The value must be read live, not hardcoded.** 112.1 ms is this speaker on this phone. A different speaker will differ, and research.md R4 already notes third-party hardware misreports.
 3. **Reported is not measured.** The remaining half of this spike is the video test, which no API can substitute for.
 
-**Still open — needs a human with a camera**: run RouteProbe's click-and-flash, film the iPhone screen and the room sound together, and read the gap between the white flash and the click. If the filmed gap is close to 112 ms, the system's figure is trustworthy and automatic compensation suffices. If it differs materially, that difference is exactly what FR-020's manual trim exists to cover, and its default should be set from this measurement.
+#### Instrument calibration — measured 2026-11-03 **[verified]**
+
+A first attempt used an iOS **screen recording**, which cannot measure route delay: it taps audio inside the device, before Bluetooth transmission, so the 112 ms is absent by construction. The attempt was still worth it, because it calibrated the instrument.
+
+Five click-and-flash events from that 12.5 s recording, audio onsets found by envelope threshold and flash onsets by per-frame mean brightness at 60 fps:
+
+| Event | Click (audio) | Flash (video) | Skew |
+|---|---|---|---|
+| 1 | 1.505 s | 1.537 s | +32 ms |
+| 2 | 3.505 s | 3.542 s | +37 ms |
+| 3 | 5.500 s | 5.547 s | +47 ms |
+| 4 | 7.520 s | 7.553 s | +33 ms |
+| 5 | 9.520 s | 9.558 s | +38 ms |
+
+**The flash lags audio dispatch by ~37 ms.** RouteProbe dispatches both in one turn, so this is SwiftUI's render latency plus the ~21–23 ms IO buffer — a systematic bias in the measuring tool, not in the audio path.
+
+That matters: the spike was designed assuming flash and click were simultaneous. They are not, and an external-camera measurement read naively would be wrong by 37 ms — about a third of the quantity being measured.
+
+Corrected relationship for the camera measurement:
+
+```
+route delay  =  (camera gap, sound after flash)  +  37 ms
+```
+
+So if the reported 112 ms is accurate, an external camera should show the sound arriving roughly **75 ms after** the flash.
+
+**Still open — needs an external camera**: a second device must film the iPhone screen while its microphone picks up the speaker through the air. A screen recording, a cable capture, or anything that taps the device internally cannot work, because the Bluetooth hop is exactly what must be included.
 
 ### Alternatives considered
 

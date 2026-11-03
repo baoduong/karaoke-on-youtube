@@ -103,6 +103,7 @@ struct RootView: View {
         SourceProviderRouter(ordered: [
             DataAPISearchProvider(),
             OnDeviceSourceProvider(),
+            CompanionSourceProvider(),
         ])
     }
 }

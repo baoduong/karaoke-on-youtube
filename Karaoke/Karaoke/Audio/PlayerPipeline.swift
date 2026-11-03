@@ -1,8 +1,4 @@
-// T047, T048, T050, T051 — PlayerPipeline.
-//
-// Implements AudioPipeline using AVPlayer. No audio engine, no processing graph,
-// no render callbacks, no custom buffering (audio-pipeline.md Architectural
-// consequence).
+// T047, T048, T050, T051, T130, T131 — PlayerPipeline.
 //
 // T047: AVPlayer handles both .remote(StreamAddress) and .local(URL) identically.
 // T048: Volume is ramped via AVPlayer.volume with a short ramp so no click occurs
@@ -14,6 +10,11 @@
 // T051: A stall emits `stalled` and does NOT trigger stream re-resolution.
 //       A radio problem is not a stream problem (audio-pipeline.md Behavioural
 //       requirement 6).
+// T130: On interruption: pause and retain position. On interruption end: emit
+//       interruptionEnded(shouldResume:) and WAIT — never auto-resume (FR-016).
+//       A call ending must not blast music at the room.
+// T131: On speaker reconnect: emit externalOutputRestored carrying the paused
+//       position so the UI can offer to resume from there, not restart (FR-018).
 //
 // Swift 6 concurrency: PlayerPipeline is @unchecked Sendable because all
 // mutable state is accessed on the main actor via Task { @MainActor in ... }.
@@ -70,6 +71,9 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
     private var currentDuration: Double = 0
     private var _position: PlaybackPosition = .invalid
     private var _outputRoute: OutputRoute = .unknown
+    /// Position captured when the pipeline pauses due to interruption or route loss (T130, T131).
+    /// Carried in the resumption offer so the UI can seek back to it.
+    private var pausedPosition: PlaybackPosition = .invalid
 
     // MARK: Init
 
@@ -375,14 +379,9 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
         emit(.routeChanged(newRoute))
     }
 
-    /// Handle external output lost (T050, FR-018).
-    ///
-    /// When the Bluetooth link drops, PAUSE immediately. Audio must NOT fall
-    /// through to the device's own speaker at party volume. The pipeline pauses
-    /// and emits `externalOutputLost` so the UI can offer to resume when the
-    /// speaker reconnects.
     @MainActor
     private func handleExternalOutputLost(previousKind: RouteKind) {
+        pausedPosition = _position
         player.pause()
         let latencyMs = AVAudioSession.sharedInstance().outputLatency * 1000
         _outputRoute = OutputRoute(
@@ -395,6 +394,10 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
         emit(.externalOutputLost(previous: previousKind))
     }
 
+    /// Handle speaker reconnect (T131, FR-018).
+    ///
+    /// Emits `externalOutputRestored` so the UI can offer to resume from the
+    /// paused position. Never auto-resumes — the singer decides.
     @MainActor
     private func handleExternalOutputRestored(_ newRoute: OutputRoute) {
         _outputRoute = newRoute
@@ -424,6 +427,9 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
             guard let self else { return }
             switch type {
             case .began:
+                // T130: capture position before pausing so the UI can offer
+                // to resume from here when the interruption ends (FR-016).
+                self.pausedPosition = self._position
                 self.player.pause()
                 self.emit(.interrupted)
                 self.emit(.stateChanged(.paused))
@@ -431,6 +437,8 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
             case .ended:
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                 let shouldResume = options.contains(.shouldResume)
+                // T130: emit and WAIT — never auto-resume. A call ending must
+                // not blast music at the room mid-conversation (FR-016).
                 self.emit(.interruptionEnded(shouldResume: shouldResume))
 
             @unknown default:

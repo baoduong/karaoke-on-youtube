@@ -42,3 +42,8 @@ Karaoke/Karaoke/Secrets.plist
 
 # Generated spike project
 Tools/spikes/*/[A-Za-z]*.xcodeproj/
+
+# Measurement recordings — large binaries, not source
+specs/*.MP4
+specs/*.mp4
+specs/*.mov

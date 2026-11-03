@@ -1,4 +1,4 @@
-// T055, T056, T061 — PlaybackSession.
+// T055, T056, T061, T124 — PlaybackSession.
 //
 // T055: In-memory state holder for one performance. Never persisted.
 // T056: State machine per data-model.md:
@@ -7,12 +7,16 @@
 //         stale address during playing → silent re-resolve (stays in playing)
 // T061: Song.playCount and lastPlayedAt are incremented only when playback
 //       passes the halfway point, not on selection.
+// T124: Prefer .local(URL) for songs with a complete SavedSong so a saved
+//       song starts within 1 s (SC-006). The local path is checked before
+//       any network call is made.
 //
-// Satisfies: FR-005, FR-007, FR-008, FR-014, FR-017, FR-018, FR-019
+// Satisfies: FR-005, FR-007, FR-008, FR-014, FR-017, FR-018, FR-019, FR-030
 
 import Foundation
 import Observation
 import SwiftData
+import SystemConfiguration
 
 // MARK: - SessionState
 
@@ -44,6 +48,9 @@ enum PlaybackError: Sendable, Equatable {
     case mechanismFailed(detail: String)
     /// No network connection.
     case offline
+    /// No network AND the song has not been saved for offline use (T125, FR-032).
+    /// Distinct from .offline so the singer knows to save the song first.
+    case offlineUnsaved
     /// The audio format is not decodable on this device.
     case unsupportedFormat(codec: String, container: String)
     /// A generic audio error.
@@ -62,6 +69,8 @@ enum PlaybackError: Sendable, Equatable {
             return .mechanismFailed(detail: "Unexpected error")
         }
     }
+
+    static func offlineUnsaved() -> PlaybackError { .offlineUnsaved }
 
     static func from(audioError: AudioError) -> PlaybackError {
         switch audioError {
@@ -180,17 +189,44 @@ final class PlaybackSession {
         self.modelContext = context
     }
 
-    /// Load and begin playing a song.
+    /// Load and begin playing a song, preferring a local saved copy (T124, SC-006).
     ///
-    /// Transitions: idle/failed → resolving → buffering → playing.
+    /// Checks for a complete SavedSong before making any network call. A saved
+    /// song starts within 1 s because no resolution is needed (SC-006, FR-030).
+    /// Falls through to remote resolution when no complete local copy exists.
     func play(songID: String, rendition: AudioRendition) async {
         self.songID = songID
         self.selectedRendition = rendition
         self.halfwayReached = false
         transition(to: .resolving)
 
+        // T124: prefer local copy — check before any network call.
+        if let localURL = localURL(for: songID) {
+            do {
+                transition(to: .buffering)
+                try pipeline.prepare()
+                try await pipeline.load(source: .local(localURL))
+                try pipeline.play()
+                transition(to: .playing)
+                return
+            } catch {
+                // Local file unreadable — fall through to remote.
+                DiagnosticLog.recordEnvironmentError(
+                    .offline,
+                    songID: songID,
+                    providerID: SourceProviderID(rawValue: "PlaybackSession.local")
+                )
+            }
+        }
+
+        // T125: no local copy — check network before attempting resolution.
+        // Fail fast (within 3 s) rather than hanging on a dead connection (FR-032).
+        if !isNetworkAvailable() {
+            transition(to: .failed(.offlineUnsaved))
+            return
+        }
+
         do {
-            // Resolve the stream address via the cache (FR-007).
             let address = try await addressCache.address(
                 for: songID,
                 itag: rendition.itag,
@@ -231,6 +267,42 @@ final class PlaybackSession {
         } catch {
             transition(to: .failed(.audioError(detail: error.localizedDescription)))
         }
+    }
+
+    // MARK: Network availability (T125)
+
+    /// Returns false when the device has no network connectivity.
+    ///
+    /// Uses a synchronous reachability check so the offline-unsaved path fails
+    /// within 3 s rather than hanging on a dead connection (FR-032).
+    private func isNetworkAvailable() -> Bool {
+        var zeroAddress = sockaddr()
+        zeroAddress.sa_len = UInt8(MemoryLayout<sockaddr>.size)
+        zeroAddress.sa_family = sa_family_t(AF_INET)
+        guard let reachability = SCNetworkReachabilityCreateWithAddress(nil, &zeroAddress) else {
+            return true // assume available if we can't check
+        }
+        var flags: SCNetworkReachabilityFlags = []
+        guard SCNetworkReachabilityGetFlags(reachability, &flags) else { return true }
+        let isReachable = flags.contains(.reachable)
+        let needsConnection = flags.contains(.connectionRequired)
+        return isReachable && !needsConnection
+    }
+
+    // MARK: Local URL resolution (T124)
+
+    /// Returns the absolute URL of a complete SavedSong, or nil when none exists.
+    ///
+    /// Queries the model context for a SavedSong with state == .complete.
+    /// Called before any network resolution so saved songs start within 1 s (SC-006).
+    private func localURL(for songID: String) -> URL? {
+        guard let context = modelContext else { return nil }
+        let targetID = songID
+        let descriptor = FetchDescriptor<SavedSong>(
+            predicate: #Predicate { $0.songID == targetID }
+        )
+        guard let saved = try? context.fetch(descriptor).first(where: { $0.state == .complete }) else { return nil }
+        return MediaStore.shared.mediaURL(for: saved.fileRelativePath)
     }
 
     func pause() {

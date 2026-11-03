@@ -1,13 +1,12 @@
-// T060 — PlaybackErrorView.
+// T060, T125 — PlaybackErrorView.
 //
-// Words content-side failures as the singer's situation and mechanism-side
-// failures distinctly, per FR-008.
+// T060: Words content-side failures as the singer's situation and mechanism-side
+//       failures distinctly, per FR-008.
+// T125: When no network and the song is unsaved, fail clearly within 3 s —
+//       never hang (FR-032). The .offlineUnsaved case is distinct from .offline
+//       so the singer knows exactly what to do: save the song first.
 //
-// The distinction matters: "This song is not available" tells the singer to
-// pick a different song. "The resolution mechanism needs updating" tells the
-// maintainer to fix the parser. Conflating them hides breakage.
-//
-// Satisfies: FR-008
+// Satisfies: FR-008, FR-032
 
 import SwiftUI
 
@@ -66,6 +65,7 @@ struct PlaybackErrorView: View {
         case .contentUnavailable: return "nosign"
         case .mechanismFailed: return "wrench.and.screwdriver"
         case .offline: return "wifi.slash"
+        case .offlineUnsaved: return "arrow.down.circle.dotted"
         case .unsupportedFormat: return "waveform.slash"
         case .audioError: return "speaker.slash"
         }
@@ -81,6 +81,8 @@ struct PlaybackErrorView: View {
             return "Playback Unavailable"
         case .offline:
             return "No Connection"
+        case .offlineUnsaved:
+            return "Song Not Saved"
         case .unsupportedFormat:
             return "Format Not Supported"
         case .audioError:
@@ -93,11 +95,11 @@ struct PlaybackErrorView: View {
         case .contentUnavailable(let reason):
             return reason
         case .mechanismFailed:
-            // Mechanism-side: do not expose internal detail to the singer.
-            // The maintainer reads the diagnostic log.
             return "The resolution mechanism is temporarily unavailable. This is a technical issue, not a problem with the song."
         case .offline:
             return "Check your network connection and try again."
+        case .offlineUnsaved:
+            return "This song hasn't been saved for offline use. Connect to the internet, or save the song first."
         case .unsupportedFormat(let codec, let container):
             return "This song uses \(codec) in \(container), which this device cannot play. The app will try a different quality."
         case .audioError(let detail):

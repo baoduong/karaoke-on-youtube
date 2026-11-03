@@ -31,6 +31,15 @@ final class OnDeviceSourceProvider: SourceProvider, @unchecked Sendable {
 
     private let networkTimeout: TimeInterval = 30
 
+    /// Maximum number of audio-only streams to process from a single video.
+    ///
+    /// A multi-hour compilation can have hundreds of format entries. Processing
+    /// all of them would load the full format list into memory and iterate it
+    /// completely. Capping at 50 covers every real rendition set (YouTube
+    /// typically offers 4–8 audio-only formats) while bounding memory use for
+    /// pathological inputs (spec edge case: Very long source, T137).
+    private let maxAudioStreams = 50
+
     func healthCheck() async -> ProviderHealth {
         .healthy
     }
@@ -81,7 +90,10 @@ final class OnDeviceSourceProvider: SourceProvider, @unchecked Sendable {
 
         // Audio-only renditions. A muxed stream carries lower-quality audio than
         // the best audio-only rendition and drags video bytes playback never uses.
-        let audioStreams = streams.filter { $0.includesAudioTrack && !$0.includesVideoTrack }
+        // Cap at maxAudioStreams to bound memory for very long compilations (T137).
+        let audioStreams = streams
+            .filter { $0.includesAudioTrack && !$0.includesVideoTrack }
+            .prefix(maxAudioStreams)
 
         var renditions: [AudioRendition] = []
         var seenItags = Set<Int>()

@@ -1,10 +1,10 @@
-// T082 — SettingsView with lyrics opt-in toggle.
+// T082, T132, T135 — SettingsView.
 //
-// The lyrics toggle defaults to OFF — no network request for text is made
-// until the singer enables it (contracts/lyrics-provider.md Behavioural
-// requirements, FR-022).
+// T082: Lyrics opt-in toggle (defaults to OFF — no network request until enabled).
+// T132: Link to SigningValidityView (FR-036).
+// T135: Companion service address field and provider-preference control (T134).
 //
-// Satisfies: FR-020, FR-022, FR-024
+// Satisfies: FR-020, FR-022, FR-024, FR-036
 
 import SwiftUI
 import SwiftData
@@ -13,6 +13,8 @@ struct SettingsView: View {
 
     @Bindable var settings: PerformanceSettings
     @AppStorage("lyricsProviderEnabled") private var lyricsProviderEnabled: Bool = false
+    @AppStorage(CompanionSourceProvider.addressKey) private var companionAddress: String = ""
+    @AppStorage("companionPreferred") private var companionPreferred: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -61,8 +63,43 @@ struct SettingsView: View {
                         )
                     }
                 }
+
+                // T135: Companion service configuration.
+                Section {
+                    TextField("http://192.168.1.x:7979", text: $companionAddress)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+
+                    Toggle("Prefer companion over on-device", isOn: $companionPreferred)
+                        .onChange(of: companionPreferred) { _, preferred in
+                            NotificationCenter.default.post(
+                                name: .companionPreferenceChanged,
+                                object: preferred
+                            )
+                        }
+
+                    Text("The companion service resolves audio server-side. Use it when on-device resolution breaks.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Companion Service")
+                } footer: {
+                    Text("Run Tools/companion-service/run.sh on your Mac. Enter the Mac's local IP address above.")
+                        .font(.caption)
+                }
+
+                Section("App") {
+                    NavigationLink("Signing Validity") {
+                        SigningValidityView()
+                    }
+                }
             }
             .navigationTitle("Settings")
         }
     }
+}
+
+extension Notification.Name {
+    static let companionPreferenceChanged = Notification.Name("companionPreferenceChanged")
 }
