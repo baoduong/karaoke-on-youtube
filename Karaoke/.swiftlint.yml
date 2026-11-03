@@ -1,0 +1,104 @@
+# SwiftLint configuration for Karaoke.
+# Install: brew install swiftlint
+#
+# Tuned for a solo project (Constitution Principle VII): rules that catch real
+# defects are on, rules that only enforce taste are off.
+
+included:
+  - Karaoke
+  - KaraokeTests
+
+excluded:
+  - Karaoke.xcodeproj
+  - .build
+  - DerivedData
+
+disabled_rules:
+  - todo                      # TODOs are tracked in tasks.md, not linted
+  - trailing_comma
+  - opening_brace
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - yoda_condition
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - overridden_super_call
+  - prohibited_super_call
+  - fatal_error_message
+  - explicit_init
+  - closure_spacing
+  - operator_usage_whitespace
+  - unavailable_function
+  - sorted_first_last
+
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 900
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 60
+  error: 120
+
+cyclomatic_complexity:
+  warning: 12
+  error: 20
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  excluded: [id, db, ms, to, at, up, x, y, i, n]
+
+nesting:
+  type_level:
+    warning: 3
+
+# Empty catch blocks and force-unwraps are Constitution-level anti-patterns,
+# not style preferences. Keep these as errors.
+force_try:
+  severity: error
+force_cast:
+  severity: error
+
+custom_rules:
+  no_microphone_api:
+    name: "Microphone API forbidden"
+    regex: "(AVAudioSession\\.sharedInstance\\(\\)\\.recordPermission|requestRecordPermission|AVAudioRecorder|\\.playAndRecord|setVoiceProcessingEnabled)"
+    message: "FR-010: this app never captures audio. The PA speaker owns the microphone. A playAndRecord session also risks dropping Bluetooth to HFP, which is telephone-quality mono."
+    severity: error
+
+  no_print:
+    name: "Use the diagnostic log"
+    regex: "(^|\\s)print\\("
+    message: "Use DiagnosticLog instead of print so maintainer-facing failures are recoverable (Principle VI)."
+    severity: warning
+
+  no_pitch_or_tempo:
+    name: "Pitch and tempo processing forbidden"
+    regex: "(AVAudioUnitTimePitch|AVAudioUnitVarispeed|\\.pitch\\s*=|rate\\s*=\\s*[0-9]*\\.?[0-9]+\\s*//.*tempo)"
+    message: "FR-011: songs play as published. No pitch or tempo processing."
+    severity: error
