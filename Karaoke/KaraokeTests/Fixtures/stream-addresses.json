@@ -1,0 +1,27 @@
+{
+  "comment": "Synthetic stream address fixtures for expiry parsing tests (T040). No real YouTube URLs.",
+  "fixtures": [
+    {
+      "id": "with-expire-param",
+      "description": "URL with explicit expire query parameter",
+      "url": "https://example.invalid/stream?expire=9999999999&itag=140&other=param",
+      "expectedExpiresAt": 9999999999,
+      "expectedSupportsRange": true
+    },
+    {
+      "id": "without-expire-param",
+      "description": "URL without expire parameter — should default conservatively (5 min from now)",
+      "url": "https://example.invalid/stream?itag=140&other=param",
+      "expectedExpiresAt": null,
+      "expectedDefaultIsConservative": true,
+      "expectedSupportsRange": true
+    },
+    {
+      "id": "malformed-expire",
+      "description": "URL with non-numeric expire value — should default conservatively",
+      "url": "https://example.invalid/stream?expire=notanumber&itag=140",
+      "expectedExpiresAt": null,
+      "expectedDefaultIsConservative": true
+    }
+  ]
+}

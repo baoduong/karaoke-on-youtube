@@ -1,0 +1,90 @@
+{
+  "_comment": "Synthetic YouTube Data API v3 search response. No real video IDs or song titles. Placeholder words only (T043).",
+  "kind": "youtube#searchListResponse",
+  "etag": "synthetic-etag-alpha",
+  "nextPageToken": "synthetic-page-token-bravo",
+  "regionCode": "US",
+  "pageInfo": {
+    "totalResults": 3,
+    "resultsPerPage": 3
+  },
+  "items": [
+    {
+      "kind": "youtube#searchResult",
+      "etag": "synthetic-etag-item-1",
+      "id": {
+        "kind": "youtube#video",
+        "videoId": "AAAAAAAAAAA"
+      },
+      "snippet": {
+        "publishedAt": "2024-01-01T00:00:00Z",
+        "channelId": "BBBBBBBBBBB",
+        "title": "Alpha Bravo Charlie Karaoke",
+        "description": "Synthetic placeholder description delta echo foxtrot.",
+        "thumbnails": {
+          "default": {
+            "url": "https://example.invalid/thumb/AAAAAAAAAAA/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://example.invalid/thumb/AAAAAAAAAAA/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          }
+        },
+        "channelTitle": "Golf Hotel India Karaoke",
+        "liveBroadcastContent": "none",
+        "publishTime": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "synthetic-etag-item-2",
+      "id": {
+        "kind": "youtube#video",
+        "videoId": "CCCCCCCCCCC"
+      },
+      "snippet": {
+        "publishedAt": "2024-02-01T00:00:00Z",
+        "channelId": "DDDDDDDDDDD",
+        "title": "Juliet Kilo Lima Karaoke Version",
+        "description": "Synthetic placeholder description mike november oscar.",
+        "thumbnails": {
+          "default": {
+            "url": "https://example.invalid/thumb/CCCCCCCCCCC/default.jpg",
+            "width": 120,
+            "height": 90
+          }
+        },
+        "channelTitle": "Papa Quebec Romeo Karaoke",
+        "liveBroadcastContent": "none",
+        "publishTime": "2024-02-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "synthetic-etag-item-3",
+      "id": {
+        "kind": "youtube#video",
+        "videoId": "EEEEEEEEEEE"
+      },
+      "snippet": {
+        "publishedAt": "2024-03-01T00:00:00Z",
+        "channelId": "FFFFFFFFFFF",
+        "title": "Sierra Tango Uniform Karaoke Instrumental",
+        "description": "Synthetic placeholder description victor whiskey xray.",
+        "thumbnails": {
+          "default": {
+            "url": "https://example.invalid/thumb/EEEEEEEEEEE/default.jpg",
+            "width": 120,
+            "height": 90
+          }
+        },
+        "channelTitle": "Yankee Zulu Alpha Karaoke",
+        "liveBroadcastContent": "none",
+        "publishTime": "2024-03-01T00:00:00Z"
+      }
+    }
+  ]
+}

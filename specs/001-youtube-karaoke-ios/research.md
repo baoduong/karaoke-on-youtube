@@ -200,9 +200,21 @@ Three properties make this the right choice:
 - **`duration`** in the response is what makes the data model's duration-mismatch rejection rule enforceable. Matching on title alone returns the wrong song often enough to matter, and this field is the check.
 - **`hasWordSync`** lets the app decide between word-level and line-level rendering *before* parsing, rather than discovering it halfway through.
 
-A second observation from the same call: `GET /api/get` with artist, track, and duration parameters returned **HTTP 503** at the time of testing. Whether that was transient or indicates the endpoint is deprecated in favour of search is unresolved.
+### Spike S6 — RESOLVED **[verified 2026-11-03]**
 
-**Verification (Spike S6)**: re-test `/api/get`; if it is unreliable, use `/api/search` with client-side duration filtering as the primary lookup. Also probe for rate limiting, which was not exercised here. Treat any 429 as `rateLimited` and back off — this is a free community service and hammering it is both rude and self-defeating.
+The planning-time HTTP 503 from `/api/get` was transient. Re-tested three consecutive times with artist, track, and duration parameters: **3 of 3 returned HTTP 200**, each in roughly 0.4 s. No rate limiting was triggered. `/api/get-cached` returns 404 and does not exist.
+
+**Decision**: use `/api/get` as the primary lookup with artist, track, and duration. Fall back to `/api/search` with client-side duration filtering when the exact lookup misses. Treat any 429 as `rateLimited` and back off — this is a free community service and hammering it is both rude and self-defeating.
+
+**The more consequential finding**: for a widely-known English-language track, `/api/search` returned 20 results and **zero of the 20 carried word-level timing** (`hasWordSync` false on every one). Line-level synced text was present throughout.
+
+That reframes the feature. Word-level highlighting is not a thing to build and occasionally lack — it is a thing that will almost never have data, and Vietnamese-language karaoke coverage is very unlikely to be better than English. So:
+
+- Line-level highlight is the feature. Build it well.
+- Word-level is opportunistic: parse it when `hasWordSync` is true, and never let the UI look broken when it is false, which is the overwhelming majority of the time.
+- FR-022's status as a SHOULD rather than a MUST is now justified by a measurement rather than an expectation.
+
+Response fields confirmed available per result: `id`, `name`, `trackName`, `artistName`, `albumName`, `duration` (float seconds), `instrumental`, `hasWordSync`, `plainLyrics`, `syncedLyrics`, `lyricsfile`.
 
 ### Supporting rationale
 
@@ -265,11 +277,28 @@ Inverting the naive design turns out to be better on every axis that matters her
 
 Together these guarantee FR-025b — the list is never empty for a singer with any history, even with no network at all.
 
-### Open question
+### Spike S8 — RESOLVED: do not build `upstreamRelated` **[verified 2026-11-03]**
 
-**[prior]** Whether the platform's own "what's next" data can be scraped from a player response, and whether the resolution library surfaces it. A search of that library's issue tracker for related/playlist/mix topics returned **no matches**, so it is likely not an existing feature.
+I inspected the YouTubeKit 0.4.10 source directly. Searching its entire `Sources/` tree for `watchNext`, `relatedVideo`, `secondaryResults`, `compactVideoRenderer`, `autoplay`, and `endscreen` returned **zero matches**. Its complete public surface is:
 
-**Verification (Spike S8)**: inspect a player response for a watch-next section and determine whether the library exposes it or whether reaching it means parsing the response directly. If it means custom parsing, weigh it against R2's established churn rate — a strategy that breaks weekly and sits behind four strategies that never break may not be worth writing at all. Deciding to skip `upstreamRelated` entirely is a legitimate outcome of this spike.
+```
+metadata · videoID · init(videoID:proxies:useOAuth:allowOAuthCache:methods:)
+checkAvailability() · ageRestricted · streams · livestreams
+```
+
+Streams and metadata. Nothing about what to watch next.
+
+**Decision: skip the strategy entirely. Task T095 is cancelled.**
+
+The reasoning is the cost-benefit the spike was defined to settle. Building it would mean hand-parsing the InnerTube watch-next response — exactly the undocumented surface that R2 measured at 12 commits per 90 days in the reference implementation. So the strategy would:
+
+- break on roughly the same cadence as stream resolution,
+- cost a rebuild **and a re-sign** each time, which is a chore performed by hand,
+- and sit at priority 1 above four strategies that never break and need no network.
+
+A component that fails weekly, is expensive to fix, and is shadowed by four reliable alternatives is not worth its maintenance. The suggestion engine ships with `sameChannel`, `coOccurrence`, `history`, and `favourite`.
+
+This is the outcome the spike explicitly permitted, and it makes the feature strictly more robust: every remaining strategy works offline, costs no quota, and leaks nothing about the singer's taste.
 
 ### Alternatives considered
 
@@ -327,15 +356,15 @@ Audio bytes stay out of the database deliberately. The SavedSong state machine r
 
 Each is a named spike with a defined outcome. S1 blocks the quality claim and must run first.
 
-| ID | Question | Blocks | Converts |
+| ID | Question | Blocks | Status |
 |---|---|---|---|
-| **S5** | Route output latency over the actual PA speaker, with and without compensation | FR-019, FR-020, SC-008 | R4 **[prior]** → measured |
-| **S0** | Which codec the Bluetooth link negotiates; size the gap vs a cable | Honest quality claims, effort allocation | R0 **[prior]** → measured |
-| **S7** | Background audio, LAN access, and signature validity on a physical device | FR-015, companion provider, FR-036 | R6 **[prior]** → measured |
-| **S1** | Can the platform decode Opus-in-WebM, directly or after remux? | FR-004 ranking, SC-004 | R1 **[prior]** → measured |
-| **S3** | Observed stream address lifetime vs declared expiry | FR-007 safety margin | R3 **[prior]** → measured |
-| **S8** | Is upstream watch-next data reachable, and worth the churn? | Whether `upstreamRelated` is built at all | R8 **[prior]** → decided |
-| **S6** | LRCLIB `/api/get` reliability and rate limits | Lyrics lookup path | R5 partial → resolved |
+| **S5** | Route output latency over the actual PA speaker, with and without compensation | FR-019, FR-020, SC-008 | ⏳ **Open — needs the speaker** |
+| **S0** | Which codec the Bluetooth link negotiates; size the gap vs a cable | Honest quality claims, effort allocation | ⏳ **Open — needs the speaker** |
+| **S7** | Background audio, LAN access, and signature validity on a physical device | FR-015, companion provider, FR-036 | ⏳ **Open — needs a device** |
+| **S1** | Can the platform decode Opus-in-WebM, directly or after remux? | FR-004 ranking, SC-004 | ⏳ Open — needs a device |
+| **S3** | Observed stream address lifetime vs declared expiry | FR-007 safety margin | ⏳ Open — needs network probing |
+| **S8** | Is upstream watch-next data reachable, and worth the churn? | Whether `upstreamRelated` ships | ✅ **Resolved 2026-11-03 — do not build it** |
+| **S6** | LRCLIB `/api/get` reliability and rate limits | Lyrics lookup path | ✅ **Resolved 2026-11-03 — `/api/get` is fine** |
 
 Ordered by importance, which the latest scope changes rewrote:
 

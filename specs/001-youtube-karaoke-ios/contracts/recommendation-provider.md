@@ -47,11 +47,15 @@ The engine never throws. A suggestion failure must not surface as an error durin
 
 | Priority | Strategy | Source | Breaks? | Cost |
 |---|---|---|---|---|
-| 1 | `upstreamRelated` | Platform's own "what's next", via the source provider | **Yes, frequently** | Network |
-| 2 | `sameChannel` | More from the same karaoke channel | Rarely | Cheap upstream call |
-| 3 | `coOccurrence` | Sung in the same past session as this song | Never | Local |
-| 4 | `history` | Previously sung, by play count and recency | Never | Local |
-| 5 | `favourite` | A favourite not yet sung this session | Never | Local |
+| ~~1~~ | ~~`upstreamRelated`~~ | **Cancelled — see below** | — | — |
+| 1 | `sameChannel` | More from the same karaoke channel | Rarely | Cheap upstream call |
+| 2 | `coOccurrence` | Sung in the same past session as this song | Never | Local |
+| 3 | `history` | Previously sung, by play count and recency | Never | Local |
+| 4 | `favourite` | A favourite not yet sung this session | Never | Local |
+
+**`upstreamRelated` was cancelled by Spike S8** (research.md R8, verified 2026-11-03). The resolution library exposes no watch-next data of any kind, so the strategy would require hand-parsing the undocumented InnerTube response — the same surface that churns roughly weekly upstream, costing a rebuild and a re-sign on each break, to sit above four strategies that never break at all. The enum case is retained so the strategy can be added later without a contract change, but nothing implements it.
+
+The practical effect is that **every shipping strategy is local or near-local**: none leaks the singer's taste, none spends search quota, and three of the four work with no network whatsoever.
 
 Strategies 3 through 5 are computable entirely from the local store. That is the guarantee behind FR-025b: for any singer who has used the app for more than a few songs, the list is never empty even with no network at all.
 

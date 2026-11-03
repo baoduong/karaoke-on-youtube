@@ -1,0 +1,90 @@
+{
+  "comment": "Synthetic fixtures for error classification tests (T037). These represent recorded upstream response patterns mapped to expected SourceError cases. No real YouTube data is included.",
+  "fixtures": [
+    {
+      "id": "fixture-private",
+      "description": "Upstream explicitly reports video is private",
+      "youtubeKitError": "videoPrivate",
+      "expectedErrorCase": "private_",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-unavailable",
+      "description": "Upstream explicitly reports video is unavailable",
+      "youtubeKitError": "videoUnavailable",
+      "expectedErrorCase": "notFound",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-age-restricted",
+      "description": "Upstream explicitly reports age restriction",
+      "youtubeKitError": "videoAgeRestricted",
+      "expectedErrorCase": "ageRestricted",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-region-blocked",
+      "description": "Upstream explicitly reports region block",
+      "youtubeKitError": "videoRegionBlocked",
+      "expectedErrorCase": "regionBlocked",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-live-stream",
+      "description": "Upstream reports this is a live stream",
+      "youtubeKitError": "liveStreamError",
+      "expectedErrorCase": "liveStreamUnsupported",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-members-only",
+      "description": "Upstream reports members-only content",
+      "youtubeKitError": "membersOnly",
+      "expectedErrorCase": "private_",
+      "expectedGroup": "content-side"
+    },
+    {
+      "id": "fixture-extract-error",
+      "description": "Parser failed — upstream said nothing about unavailability. MUST be resolutionFailed, NOT notFound.",
+      "youtubeKitError": "extractError",
+      "expectedErrorCase": "resolutionFailed",
+      "expectedGroup": "mechanism-side",
+      "criticalNote": "This is the highest-value classification. A broken parser must never appear as notFound."
+    },
+    {
+      "id": "fixture-html-parse-error",
+      "description": "HTML parser failed — markup changed. MUST be resolutionFailed.",
+      "youtubeKitError": "htmlParseError",
+      "expectedErrorCase": "resolutionFailed",
+      "expectedGroup": "mechanism-side"
+    },
+    {
+      "id": "fixture-regex-error",
+      "description": "Regex match failed — extraction pattern changed. MUST be resolutionFailed.",
+      "youtubeKitError": "regexMatchError",
+      "expectedErrorCase": "resolutionFailed",
+      "expectedGroup": "mechanism-side"
+    },
+    {
+      "id": "fixture-max-retries",
+      "description": "Max retries exceeded — mechanism failure. MUST be resolutionFailed.",
+      "youtubeKitError": "maxRetriesExceeded",
+      "expectedErrorCase": "resolutionFailed",
+      "expectedGroup": "mechanism-side"
+    },
+    {
+      "id": "fixture-offline",
+      "description": "No network connectivity",
+      "urlErrorCode": "notConnectedToInternet",
+      "expectedErrorCase": "offline",
+      "expectedGroup": "environment"
+    },
+    {
+      "id": "fixture-timeout",
+      "description": "Network call timed out",
+      "urlErrorCode": "timedOut",
+      "expectedErrorCase": "timeout",
+      "expectedGroup": "environment"
+    }
+  ]
+}
