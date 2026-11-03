@@ -83,6 +83,21 @@ protocol AudioPipeline: AnyObject, Sendable {
     ///   200 ms (SC-007). No other processing is applied to the samples (FR-009).
     func setVolume(_ volume: Double)
 
+    // MARK: Tone control (FR-043)
+
+    /// Apply the singer's tone control. Safe to call during playback.
+    ///
+    /// Takes effect within 200 ms with no click (SC-015). Flat or bypassed
+    /// settings leave the samples untouched, which is what keeps SC-007's
+    /// bit-identity claim true by default.
+    func setEqualizer(_ settings: EqualizerSettings)
+
+    /// False when the platform cannot apply a tone control to what is
+    /// currently loaded, so the UI can say why instead of showing a control
+    /// that silently does nothing (Principle VI) — which is exactly how
+    /// `AVPlayer` behaves with an audio mix on HLS before iOS 27.
+    var isEqualizerAvailable: Bool { get }
+
     // MARK: Output route (FR-014, FR-017 … FR-019)
 
     /// The currently active output route.

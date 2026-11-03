@@ -6,12 +6,15 @@ import SwiftData
 /// The singer's audio controls. A singleton — one set, applied to whatever is
 /// playing, persisted across songs and restarts (FR-028).
 ///
-/// **Exactly three fields** (data-model.md PerformanceSettings):
-/// - `outputVolume`          — 0.0 … 1.0
+/// Fields:
+/// - `outputVolume` — 0.0 … 1.0
+/// - the tone control: three band gains and a bypass (FR-043)
 ///
 /// There are no vocal fields — the PA speaker owns the microphone, its effects,
 /// and the vocal-versus-music balance in hardware (FR-010).
 /// There are no pitch or tempo fields — songs play as published (FR-011).
+/// The tone control is not an exception to that: it shapes frequency response
+/// and touches neither pitch nor tempo.
 ///
 /// **Clamping on read AND write** (T023, data-model invariant 5):
 /// A corrupted or hand-edited store must not push an out-of-range value at a
@@ -24,6 +27,13 @@ final class PerformanceSettings {
     // Stored with underscore names so the public computed properties can clamp.
 
     private var _outputVolume: Double
+
+    // Defaults are declared inline so adding the tone control to an existing
+    // store is a lightweight migration rather than a launch failure.
+    private var _equalizerEnabled: Bool = false
+    private var _equalizerBassDB: Double = 0
+    private var _equalizerMidDB: Double = 0
+    private var _equalizerTrebleDB: Double = 0
 
     // MARK: Ranges (static so tests can reference them without an instance)
 
@@ -42,6 +52,29 @@ final class PerformanceSettings {
     var outputVolume: Double {
         get { _outputVolume.clamped(to: Self.outputVolumeRange) }
         set { _outputVolume = newValue.clamped(to: Self.outputVolumeRange) }
+    }
+
+    /// The singer's tone control (FR-043).
+    ///
+    /// Clamped on read as well as write, for the same reason `outputVolume`
+    /// is: a hand-edited or corrupted store must not push a 40 dB boost into
+    /// a PA. `EqualizerSettings` does the clamping, so the rule lives in one
+    /// place rather than being restated here.
+    var equalizer: EqualizerSettings {
+        get {
+            EqualizerSettings(
+                bassGainDB: _equalizerBassDB,
+                midGainDB: _equalizerMidDB,
+                trebleGainDB: _equalizerTrebleDB,
+                isEnabled: _equalizerEnabled
+            )
+        }
+        set {
+            _equalizerBassDB = newValue.bassGainDB
+            _equalizerMidDB = newValue.midGainDB
+            _equalizerTrebleDB = newValue.trebleGainDB
+            _equalizerEnabled = newValue.isEnabled
+        }
     }
 
     // MARK: Init

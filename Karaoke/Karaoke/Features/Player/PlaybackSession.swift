@@ -406,6 +406,15 @@ final class PlaybackSession {
         pipeline.setVolume(volume)
     }
 
+    /// Apply the singer's tone control (FR-043).
+    func setEqualizer(_ settings: EqualizerSettings) {
+        pipeline.setEqualizer(settings)
+    }
+
+    /// False when the platform could not splice the tone control into what is
+    /// playing, so the UI can explain rather than lie.
+    var isEqualizerAvailable: Bool { pipeline.isEqualizerAvailable }
+
     func stop() {
         pipeline.stop()
         transition(to: .idle)

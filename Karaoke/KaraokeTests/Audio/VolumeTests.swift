@@ -35,6 +35,9 @@ struct VolumeTests {
         func setVolume(_ volume: Double) {
             recordedVolume = Float(max(0.0, min(1.0, volume)))
         }
+
+        func setEqualizer(_ settings: EqualizerSettings) {}
+        var isEqualizerAvailable: Bool { false }
     }
 
     // MARK: Tests

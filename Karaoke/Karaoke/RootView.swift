@@ -40,6 +40,8 @@ struct RootView: View {
     /// The in-flight start, kept so the overlay's Cancel can stop it.
     @State private var startTask: Task<Void, Never>?
     @State private var prewarmer = ManifestPrewarmer()
+    @State private var showEqualizer = false
+    @State private var equalizer = EqualizerSettings.flat
 
     init() {
         let router = Self.makeRouter()
@@ -108,6 +110,8 @@ struct RootView: View {
         .modelContext(modelContext)
         .task {
             queueService.restoreOnLaunch()
+            equalizer = settings.equalizer
+            session.setEqualizer(equalizer)
             runDemoSearchIfRequested()
             startDemoSongIfRequested()
         }
@@ -220,6 +224,24 @@ struct RootView: View {
                             Label("Search", systemImage: "chevron.left")
                         }
                     }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showEqualizer = true
+                        } label: {
+                            Label("Tone", systemImage: equalizer.isTransparent
+                                ? "slider.horizontal.3"
+                                : "slider.horizontal.below.square.filled.and.square")
+                        }
+                    }
+                }
+                .sheet(isPresented: $showEqualizer) {
+                    EqualizerView(
+                        settings: $equalizer,
+                        isAvailable: session.isEqualizerAvailable
+                    ) { updated in
+                        session.setEqualizer(updated)
+                        settings.equalizer = updated
+                    }
                 }
         }
     }
@@ -321,6 +343,7 @@ struct RootView: View {
         Task { await refreshSuggestions(for: songID) }
         Task { await describeAudio(for: songID) }
         prewarmUpcoming()
+        showDemoEqualizerIfRequested()
     }
 
     /// Builds manifests ahead of the singer for the songs most likely to be
@@ -461,6 +484,27 @@ struct RootView: View {
         return (0...3).contains(requested) ? requested : 0
         #else
         return 0
+        #endif
+    }
+
+    /// DEBUG-only: open the tone sheet with bands already moved, set with
+    /// `-uiDemoEqualizer <bass,mid,treble>`. The sheet reports whether the
+    /// platform accepted the tap, and that answer is the one thing about this
+    /// feature a command line cannot otherwise reach.
+    private func showDemoEqualizerIfRequested() {
+        #if DEBUG
+        guard let raw = UserDefaults.standard.string(forKey: "uiDemoEqualizer") else { return }
+        let parts = raw.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 3 else { return }
+        equalizer = EqualizerSettings(
+            bassGainDB: parts[0],
+            midGainDB: parts[1],
+            trebleGainDB: parts[2],
+            isEnabled: true
+        )
+        session.setEqualizer(equalizer)
+        settings.equalizer = equalizer
+        showEqualizer = true
         #endif
     }
 

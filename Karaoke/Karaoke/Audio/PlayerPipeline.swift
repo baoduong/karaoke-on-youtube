@@ -71,6 +71,13 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
     private var rateObservation: NSKeyValueObservation?
     private var stalledObservation: NSKeyValueObservation?
 
+    private let equalizer = EqualizerTap()
+    private var equalizerSettings: EqualizerSettings = .flat
+
+    /// Whether a tap could actually be attached to the item now playing.
+    /// HLS needs iOS 27; file-based sources need a loadable audio track.
+    private var equalizerAttached = false
+
     private var currentDuration: Double = 0
 
     var duration: Double { currentDuration }
@@ -172,6 +179,7 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
                     self.setupStalledObserver(item: observedItem)
                     self.loadDuration(from: asset)
                     self.setupItemEndObserver(item: observedItem)
+                    await self.attachEqualizer(to: observedItem, asset: asset)
                     continuation.resume()
                 }
             case .failed:
@@ -268,6 +276,51 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
         Task { @MainActor [weak self] in
             self?.player.volume = Float(clamped)
         }
+    }
+
+    // MARK: Tone control (FR-043)
+
+    var isEqualizerAvailable: Bool { equalizerAttached }
+
+    func setEqualizer(_ settings: EqualizerSettings) {
+        equalizerSettings = settings
+        equalizer.apply(settings)
+    }
+
+    /// Splice the tone control into the item that is about to play.
+    ///
+    /// Two paths, because the platform has two. HLS has no static audio track
+    /// to name, so it needs the iOS 27 mix-wide track id; a file or
+    /// progressive stream has a real track and works on any supported system.
+    /// When neither applies the item simply plays unprocessed — the singer is
+    /// told through `isEqualizerAvailable` rather than left with a control
+    /// that does nothing.
+    @MainActor
+    private func attachEqualizer(to item: AVPlayerItem, asset: AVURLAsset) async {
+        equalizerAttached = false
+
+        let parameters = AVMutableAudioMixInputParameters()
+        var madeTap: MTAudioProcessingTap?
+
+        let tracks = try? await asset.loadTracks(withMediaType: .audio)
+        if let track = tracks?.first {
+            parameters.trackID = track.trackID
+            madeTap = equalizer.makeProcessingTap(forTrackMix: false)
+        } else if #available(iOS 27.0, *) {
+            // No track table: an HLS asset. The mix-wide id is the only way in.
+            parameters.trackID = CMPersistentTrackID(0)
+            madeTap = equalizer.makeProcessingTap(forTrackMix: true)
+        }
+
+        guard let madeTap else { return }
+        parameters.audioTapProcessor = madeTap
+
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = [parameters]
+        item.audioMix = mix
+
+        equalizer.apply(equalizerSettings)
+        equalizerAttached = true
     }
 
     // MARK: Private — Time observer
