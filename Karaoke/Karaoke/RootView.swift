@@ -1,55 +1,96 @@
-// Phase 4 — RootView wired to the real search and player UI (User Story 1).
-//
-// Replaces the Phase 1 placeholder. The search screen is the entry point;
-// selecting a result opens the player.
-
+import SwiftData
 import SwiftUI
 
-/// The root view of the karaoke app.
+/// The app shell.
 ///
-/// Wires the search screen to the player screen. The router is configured with
-/// DataAPISearchProvider (for search and metadata) and OnDeviceSourceProvider
-/// (for rendition resolution and stream addresses), in that order.
+/// Four tabs, because six screens had been built with nothing navigating to
+/// them: Settings, Queue, Library, SavedSongs, Suggestions and SourceVideo all
+/// compiled and passed their tests while being unreachable. Three user stories
+/// were effectively unshipped as a result, which no unit test could have
+/// caught — there is nothing to assert about a view nobody can open.
 struct RootView: View {
 
     @State private var router = makeRouter()
     @State private var searchViewModel: SearchViewModel
     @State private var session: PlaybackSession
-    @State private var showPlayer = false
+    @State private var queueService: QueueService
+    @State private var favouritesService: FavouritesService
+    @State private var settings: PerformanceSettings
+    @State private var suggestionsState: SuggestionsState = .idle
+    @State private var lyrics = LyricsViewModel()
+
+    private let modelContext: ModelContext
+    private let mediaStore: MediaStore
+    private let saveCoordinator: SaveCoordinator
+    private let suggestionEngine: BlendedRecommendationEngine
+    private let lyricsProvider: LyricsProvider
+
     @State private var pendingSong: SongMetadata?
+    @State private var showPlayer = false
 
     init() {
         let router = Self.makeRouter()
-        let pipeline = PlayerPipeline()
-        let cache = StreamAddressCache()
+        let store = MediaStore.shared
+        let context = ModelContext(store.container)
+
         _router = State(initialValue: router)
         _searchViewModel = State(initialValue: SearchViewModel(router: router))
-        _session = State(initialValue: PlaybackSession(pipeline: pipeline, router: router, addressCache: cache))
+        _session = State(initialValue: PlaybackSession(
+            pipeline: PlayerPipeline(),
+            router: router,
+            addressCache: StreamAddressCache()
+        ))
+        _queueService = State(initialValue: QueueService(context: context))
+        _favouritesService = State(initialValue: FavouritesService(context: context))
+        _settings = State(initialValue: Self.loadSettings(context: context))
+
+        modelContext = context
+        mediaStore = store
+        saveCoordinator = SaveCoordinator(mediaStore: store)
+        suggestionEngine = BlendedRecommendationEngine(providers: [
+            SameChannelStrategy(modelContext: context),
+            CoOccurrenceStrategy(modelContext: context),
+            HistoryStrategy(modelContext: context),
+            FavouriteStrategy(modelContext: context)
+        ])
+        lyricsProvider = LRCLIBProvider()
     }
 
     var body: some View {
-        Group {
-            if showPlayer, let song = pendingSong {
-                playerScreen(song: song)
-            } else {
-                searchScreen
-            }
+        TabView {
+            singTab
+                .tabItem { Label("Sing", systemImage: "music.mic") }
+
+            QueueView(service: queueService)
+                .tabItem { Label("Queue", systemImage: "list.number") }
+
+            libraryTab
+                .tabItem { Label("Library", systemImage: "heart") }
+
+            SettingsView(settings: settings)
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+        }
+        .modelContext(modelContext)
+        .task { queueService.restoreOnLaunch() }
+        .onReceive(Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()) { _ in
+            tickLyrics()
         }
     }
 
-    // MARK: Search screen
+    // MARK: Sing
 
-    private var searchScreen: some View {
-        SearchView(viewModel: searchViewModel) { song in
-            pendingSong = song
-            showPlayer = true
-            Task {
-                await loadAndPlay(song: song)
+    @ViewBuilder
+    private var singTab: some View {
+        if showPlayer, let song = pendingSong {
+            playerScreen(song: song)
+        } else {
+            SearchView(viewModel: searchViewModel) { song in
+                pendingSong = song
+                showPlayer = true
+                Task { await loadAndPlay(song: song) }
             }
         }
     }
-
-    // MARK: Player screen
 
     private func playerScreen(song: SongMetadata) -> some View {
         VStack(spacing: 0) {
@@ -68,36 +109,123 @@ struct RootView: View {
             if let error = session.lastError {
                 PlaybackErrorView(
                     error: error,
-                    onRetry: {
-                        Task { await loadAndPlay(song: song) }
-                    },
+                    onRetry: { Task { await loadAndPlay(song: song) } },
                     onDismiss: {
                         showPlayer = false
                         session.stop()
                     }
                 )
             } else {
-                PlayerView(session: session) {
-                    showPlayer = false
-                    session.stop()
+                ScrollView {
+                    PlayerView(session: session) {
+                        showPlayer = false
+                        session.stop()
+                    }
+
+                    LyricsView(viewModel: lyrics, fontScale: settings.lyricsFontScale)
+                        .padding(.top, 12)
+
+                    SuggestionsView(
+                        state: suggestionsState,
+                        onAddToQueue: { songID in
+                            queueService.enqueue(songID: songID)
+                        },
+                        onPlayNow: { songID in
+                            Task { await playByID(songID) }
+                        }
+                    )
+                    .padding(.top, 12)
                 }
             }
         }
     }
 
-    // MARK: Load and play
+    // MARK: Library
+
+    private var libraryTab: some View {
+        NavigationStack {
+            List {
+                NavigationLink("Favourites") {
+                    LibraryView(favouritesService: favouritesService, queueService: queueService)
+                }
+                NavigationLink("Saved for offline") {
+                    SavedSongsView(mediaStore: mediaStore, coordinator: saveCoordinator)
+                }
+            }
+            .navigationTitle("Library")
+        }
+    }
+
+    // MARK: Playback
 
     private func loadAndPlay(song: SongMetadata) async {
         do {
             let renditions = try await router.audioRenditions(for: song.id)
             let selected = try RenditionSelection.select(from: renditions, songID: song.id)
             await session.play(songID: song.id, rendition: selected)
+            await refreshSuggestions(for: song.id)
+            await loadLyrics(for: song)
         } catch {
-            _ = error
+            DiagnosticLog.recordMechanismError(error, songID: song.id, providerID: router.identifier)
         }
     }
 
-    // MARK: Router factory
+    private func playByID(_ songID: String) async {
+        do {
+            let metadata = try await router.metadata(for: SourceReference(songID: songID))
+            pendingSong = metadata
+            await loadAndPlay(song: metadata)
+        } catch {
+            DiagnosticLog.recordMechanismError(error, songID: songID, providerID: router.identifier)
+        }
+    }
+
+    /// Suggestions are regenerated per song and never cached: the exclusion
+    /// set changes every few minutes, so a cached list is a stale one (T101).
+    private func refreshSuggestions(for songID: String) async {
+        suggestionsState = .loading
+        let results = await suggestionEngine.suggestions(
+            for: songID,
+            excluding: session.performedSongIDs,
+            limit: 8
+        )
+        suggestionsState = results.isEmpty ? .coldStart : .loaded(results)
+    }
+
+    /// Lyrics never block playback: they are fetched after audio has started
+    /// and their absence changes nothing (FR-025d's sibling rule for US3).
+    private func loadLyrics(for song: SongMetadata) async {
+        lyrics.setTrack(nil)
+        let query = LyricsQuery(
+            title: song.title,
+            artist: song.channelName,
+            durationSeconds: song.durationSeconds
+        )
+        let track = try? await lyricsProvider.lyrics(for: query)
+        lyrics.setTrack(track)
+    }
+
+    /// The audio clock is the only clock: the view asks the session for its
+    /// position rather than keeping one, which is how lyric drift is avoided.
+    private func tickLyrics() {
+        lyrics.update(
+            positionSeconds: session.positionSeconds,
+            outputLatencyMs: session.outputLatencyMs,
+            globalOffsetMs: lyrics.track?.globalOffsetMs ?? 0,
+            manualLyricsOffsetMs: settings.manualLyricsOffsetMs
+        )
+    }
+
+    // MARK: Factories
+
+    private static func loadSettings(context: ModelContext) -> PerformanceSettings {
+        let existing = try? context.fetch(FetchDescriptor<PerformanceSettings>())
+        if let found = existing?.first { return found }
+        let created = PerformanceSettings()
+        context.insert(created)
+        try? context.save()
+        return created
+    }
 
     /// Provider order, which is also the search policy.
     ///
@@ -110,7 +238,7 @@ struct RootView: View {
         SourceProviderRouter(ordered: [
             CompanionSourceProvider(),
             OnDeviceSourceProvider(),
-            DataAPISearchProvider(),
+            DataAPISearchProvider()
         ])
     }
 }
