@@ -20,6 +20,9 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    # Device builds need a team. Override for another developer with
+    # `xcodebuild DEVELOPMENT_TEAM=...`; simulator builds ignore it.
+    DEVELOPMENT_TEAM: 48T636CL5V
     SWIFT_TREAT_WARNINGS_AS_ERRORS: false
     GCC_TREAT_WARNINGS_AS_ERRORS: false
     ENABLE_USER_SCRIPT_SANDBOXING: true

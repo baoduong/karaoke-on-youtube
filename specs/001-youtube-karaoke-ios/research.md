@@ -374,7 +374,29 @@ The annual fee buys the difference between *works until you next remember to plu
 
 **[prior]** Background audio, local networking (needed to reach a companion service on the LAN), and ordinary network access are available to a sideloaded app under either account type. Microphone access is not required at all — FR-010 removed it, which also removes one permission prompt and one privacy-string obligation.
 
-**Verification (Spike S7)**: before committing to the architecture, install a trivial build under the intended account type and confirm three things on a physical device — audio continues when backgrounded and when the screen locks; a request to a LAN address succeeds; and the observed signature validity matches expectation. Each of these is cheap to test and expensive to discover late.
+### Spike S7 — PARTIALLY MEASURED 2026-11-03 **[verified on device]**
+
+The app was built, signed, installed and launched on an iPhone 16 Pro. It reaches its search screen with no crash, so signing, device trust and launch all work.
+
+Reading the embedded provisioning profile gives the signing answer directly:
+
+| Property | Value |
+|---|---|
+| Profile | `iOS Team Provisioning Profile: com.karaoke.personal.Karaoke` |
+| Team | Duong Bao (`48T636CL5V`) |
+| Created | 2026-11-03 |
+| Expires | 2026-11-10 |
+| **Validity** | **7 days** |
+| Provisioned devices | 1 |
+
+**This is a free-tier account**, and the seven-day window is exactly the figure R6 treated as a product defect rather than an inconvenience. Concretely: a build installed today stops launching next Monday, and the failure arrives at whatever moment the app is next opened — which for a karaoke app means in front of guests.
+
+Two consequences, now grounded in a measurement:
+
+1. **FR-036 is not optional decoration.** The app must surface its own remaining validity, because the alternative is a mystery failure. Six days of warning is plenty; zero is a ruined evening.
+2. **The paid programme buys a year instead of a week.** That is the whole difference between a scheduled annual chore and a weekly ritual that will eventually be forgotten at the worst time. The recommendation in R6 stands, now with a number behind it.
+
+**Still open**: background-audio continuity and LAN reachability both need the app driven through a real playback session, which needs search configured and a song playing. They are covered by quickstart Scenario 7 and Scenario 9 rather than by a separate probe.
 
 These limits are **version-dependent**. Apple has changed signing and distribution rules repeatedly, and regional rules diverge. Re-confirm against current official documentation at implementation time rather than trusting any figure quoted second-hand.
 
