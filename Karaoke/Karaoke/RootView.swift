@@ -99,11 +99,18 @@ struct RootView: View {
 
     // MARK: Router factory
 
+    /// Provider order, which is also the search policy.
+    ///
+    /// The companion goes first because it has no key and no daily quota,
+    /// while the Data API allows 100 searches per day — a single party's
+    /// worth. The Data API stays as the fallback for when the companion is
+    /// not running, and the on-device resolver sits between them because it
+    /// resolves streams but cannot search at all.
     private static func makeRouter() -> SourceProviderRouter {
         SourceProviderRouter(ordered: [
-            DataAPISearchProvider(),
-            OnDeviceSourceProvider(),
             CompanionSourceProvider(),
+            OnDeviceSourceProvider(),
+            DataAPISearchProvider(),
         ])
     }
 }

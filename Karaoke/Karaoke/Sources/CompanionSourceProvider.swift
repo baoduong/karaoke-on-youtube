@@ -66,23 +66,97 @@ final class CompanionSourceProvider: SourceProvider, @unchecked Sendable {
         }
     }
 
-    // MARK: SourceProvider — search (not supported)
+    // MARK: SourceProvider — search
 
+    /// Searches through the companion service, which has no key and no quota.
+    ///
+    /// This is the primary search path. The Data API allows 100 searches per
+    /// day, which one party exhausts, so it is the fallback rather than the
+    /// default. The companion drives YouTube's own search, so results match
+    /// what a browser shows — which matters for Vietnamese karaoke channels
+    /// that the Data API ranks poorly.
     func search(query: String, limit: Int) async throws(SourceError) -> [SongMetadata] {
-        throw .resolutionFailed(
-            query,
-            stage: .fetchingPage,
-            detail: "companion provider cannot search; route search to the Data API provider"
-        )
+        guard !Task.isCancelled else { throw SourceError.cancelled }
+        let base = try requireBaseURL(songID: query)
+
+        guard var components = URLComponents(
+            url: base.appendingPathComponent("search"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SourceError.resolutionFailed(query, stage: .fetchingPage, detail: "could not build companion URL")
+        }
+        components.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+        guard let url = components.url else {
+            throw SourceError.resolutionFailed(query, stage: .fetchingPage, detail: "could not build companion URL")
+        }
+
+        let data = try await fetch(url: url, songID: query, stage: .fetchingPage)
+        guard !Task.isCancelled else { throw SourceError.cancelled }
+        return try Self.parseSearchResults(data: data, query: query)
     }
 
-    // MARK: SourceProvider — metadata (not supported)
+    // MARK: SourceProvider — metadata
 
+    /// Full metadata including channel and duration, neither of which the
+    /// on-device resolver can read.
     func metadata(for reference: SourceReference) async throws(SourceError) -> SongMetadata {
-        throw .resolutionFailed(
-            reference.songID,
-            stage: .parsingPlayerResponse,
-            detail: "companion provider does not supply metadata; route to the Data API provider"
+        guard !Task.isCancelled else { throw SourceError.cancelled }
+        let songID = reference.songID
+        let base = try requireBaseURL(songID: songID)
+
+        guard var components = URLComponents(
+            url: base.appendingPathComponent("metadata"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SourceError.resolutionFailed(songID, stage: .parsingPlayerResponse, detail: "could not build companion URL")
+        }
+        components.queryItems = [URLQueryItem(name: "id", value: songID)]
+        guard let url = components.url else {
+            throw SourceError.resolutionFailed(songID, stage: .parsingPlayerResponse, detail: "could not build companion URL")
+        }
+
+        let data = try await fetch(url: url, songID: songID, stage: .parsingPlayerResponse)
+        guard !Task.isCancelled else { throw SourceError.cancelled }
+
+        guard let object = try? JSONSerialization.jsonObject(data) as? [String: Any],
+              let parsed = Self.parseSongMetadata(object)
+        else {
+            throw SourceError.upstreamContractChanged(detail: "companion /metadata returned an unusable shape")
+        }
+        return parsed
+    }
+
+    // MARK: Search parsing
+
+    static func parseSearchResults(data: Data, query: String) throws(SourceError) -> [SongMetadata] {
+        guard let root = try? JSONSerialization.jsonObject(data) as? [String: Any],
+              let rawResults = root["results"] as? [[String: Any]]
+        else {
+            throw SourceError.upstreamContractChanged(detail: "companion /search returned an unusable shape")
+        }
+        // Entries missing a usable duration are dropped rather than surfaced:
+        // Song validation rejects a non-positive duration, so passing one
+        // through makes the result vanish later with no visible reason.
+        return rawResults.compactMap(parseSongMetadata)
+    }
+
+    static func parseSongMetadata(_ raw: [String: Any]) -> SongMetadata? {
+        guard let id = raw["id"] as? String, !id.isEmpty,
+              let title = raw["title"] as? String, !title.trimmingCharacters(in: .whitespaces).isEmpty,
+              let duration = raw["durationSeconds"] as? Int, duration > 0
+        else {
+            return nil
+        }
+        let channel = (raw["channelName"] as? String) ?? ""
+        return SongMetadata(
+            id: id,
+            title: title,
+            channelName: channel.isEmpty ? "Unknown" : channel,
+            durationSeconds: duration,
+            thumbnailURL: (raw["thumbnailURL"] as? String).flatMap(URL.init(string:))
         )
     }
 

@@ -48,6 +48,75 @@ def run_ytdlp(args: list[str]) -> dict:
         raise RuntimeError(f"yt-dlp output is not valid JSON: {e}")
 
 
+def run_ytdlp_lines(args: list[str]) -> list[dict]:
+    """Run yt-dlp expecting one JSON object per line, as search results are."""
+    cmd = ["yt-dlp", "--no-warnings", "--quiet"] + args
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+        if result.returncode != 0:
+            raise RuntimeError(f"yt-dlp exited {result.returncode}: {result.stderr.strip()}")
+        return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"yt-dlp timed out after {TIMEOUT_SECONDS}s")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"yt-dlp output is not valid JSON: {e}")
+
+
+def search(query: str, limit: int) -> dict:
+    """
+    Search YouTube with no API key and no daily quota.
+
+    This exists because the Data API allows only 100 searches per day, which a
+    single party exhausts. yt-dlp's ytsearch drives YouTube's own search, so
+    coverage matches what a browser would show — including the Vietnamese
+    karaoke channels the Data API ranks poorly.
+
+    --flat-playlist keeps this to one request: it returns search metadata
+    without resolving each result's formats, which would otherwise mean one
+    full extraction per hit.
+    """
+    limit = max(1, min(limit, 50))
+    entries = run_ytdlp_lines([
+        f"ytsearch{limit}:{query}",
+        "--flat-playlist",
+        "--dump-json",
+    ])
+
+    results = []
+    for entry in entries:
+        video_id = entry.get("id")
+        duration = entry.get("duration")
+        # Songs without a usable duration are dropped rather than passed on:
+        # Song validation rejects a non-positive duration, so forwarding one
+        # would make the result vanish later with no explanation.
+        if not video_id or not duration:
+            continue
+        results.append({
+            "id": video_id,
+            "title": entry.get("title") or "",
+            "channelName": entry.get("channel") or entry.get("uploader") or "",
+            "durationSeconds": int(duration),
+            "thumbnailURL": entry.get("thumbnails", [{}])[-1].get("url") if entry.get("thumbnails") else None,
+        })
+    return {"results": results}
+
+
+def metadata(video_id: str) -> dict:
+    """Full metadata for one video, including the duration and channel that
+    the on-device resolver cannot read."""
+    info = run_ytdlp([f"https://www.youtube.com/watch?v={video_id}", "--dump-json", "--skip-download"])
+    duration = info.get("duration")
+    if not duration:
+        raise RuntimeError("upstream returned no duration")
+    return {
+        "id": video_id,
+        "title": info.get("title") or "",
+        "channelName": info.get("channel") or info.get("uploader") or "",
+        "durationSeconds": int(duration),
+        "thumbnailURL": info.get("thumbnail"),
+    }
+
+
 def resolve_renditions(video_id: str) -> dict:
     """
     Return all audio-only renditions for a video.
@@ -208,6 +277,31 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/health":
             self._json(200, {"status": "ok"})
+
+        elif path == "/search":
+            query = params.get("q", [None])[0]
+            if not query:
+                self._json(400, {"error": "missing q parameter"})
+                return
+            try:
+                limit = int(params.get("limit", ["20"])[0])
+            except ValueError:
+                self._json(400, {"error": "limit must be an integer"})
+                return
+            try:
+                self._json(200, search(query, limit))
+            except Exception as exc:
+                self._json(500, {"error": str(exc)})
+
+        elif path == "/metadata":
+            video_id = params.get("id", [None])[0]
+            if not video_id:
+                self._json(400, {"error": "missing id parameter"})
+                return
+            try:
+                self._json(200, metadata(video_id))
+            except Exception as exc:
+                self._json(500, {"error": str(exc)})
 
         elif path == "/resolve-renditions":
             video_id = params.get("id", [None])[0]
