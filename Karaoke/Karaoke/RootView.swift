@@ -17,6 +17,7 @@ struct RootView: View {
     @State private var favouritesService: FavouritesService
     @State private var settings: PerformanceSettings
     @State private var suggestionsState: SuggestionsState = .idle
+    @State private var showQualityDetail = false
     @State private var selectedTab: Int = Self.initialTab
     @State private var lyrics = LyricsViewModel()
 
@@ -117,6 +118,12 @@ struct RootView: View {
         NavigationStack {
             playerBody(song: song)
                 .background(Theme.Palette.background)
+                .sheet(isPresented: $showQualityDetail) {
+                    QualityDetailView(
+                        rendition: session.selectedRendition,
+                        outputRoute: session.outputRoute
+                    )
+                }
                 .navigationTitle("Now Playing")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(Theme.Palette.background, for: .navigationBar)
@@ -136,6 +143,16 @@ struct RootView: View {
     @ViewBuilder
     private func playerBody(song: SongMetadata) -> some View {
         VStack(spacing: 0) {
+            // Outside the scroll view on purpose: the words are in the
+            // picture on most karaoke uploads, so scrolling the video away
+            // would remove what the singer is reading.
+            PlayerVideoStage(
+                player: session.videoPlayer,
+                isLoaded: session.songID != nil,
+                route: session.outputRoute,
+                onShowQualityDetail: { showQualityDetail = true }
+            )
+
             if let error = session.lastError {
                 PlaybackErrorView(
                     error: error,

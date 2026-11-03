@@ -23,7 +23,6 @@ struct PlayerView: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
-            videoStage
             songInfo
             positionBar
             transportControls
@@ -40,86 +39,6 @@ struct PlayerView: View {
                 rendition: session.selectedRendition,
                 outputRoute: session.outputRoute
             )
-        }
-    }
-
-    // MARK: Video stage
-
-    /// 16:9 at full width, with the route badge overlaid in a corner so it
-    /// costs no vertical space and never sits over the centre of the frame.
-    private var videoStage: some View {
-        ZStack(alignment: .topTrailing) {
-            Group {
-                if let player = session.videoPlayer, session.songID != nil {
-                    SourceVideoView(player: player)
-                } else {
-                    ZStack {
-                        Theme.Palette.surface
-                        Image(systemName: "music.note.tv")
-                            .font(.system(size: 44, weight: .light))
-                            .foregroundStyle(Theme.Palette.textTertiary)
-                    }
-                }
-            }
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
-
-            routeBadge.padding(Theme.Space.sm)
-        }
-    }
-
-    // MARK: Route badge (FR-014)
-
-    /// Names the route and, when it re-encodes, says so.
-    ///
-    /// Bluetooth compresses the audio again before transmitting. The app
-    /// discloses that rather than claiming a bitrate the link discards — but
-    /// as a calm note, not an alarm: it is the normal, chosen setup.
-    private var routeBadge: some View {
-        HStack(spacing: Theme.Space.xs) {
-            Image(systemName: routeIcon)
-                .font(.caption2)
-            Text(routeName)
-                .font(.caption2.weight(.medium))
-                .lineLimit(1)
-            if session.outputRoute.degradesQuality {
-                Text("re-encoded")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.Palette.textSecondary)
-            }
-            Button {
-                showQualityDetail = true
-            } label: {
-                Image(systemName: "info.circle")
-                    .font(.caption2)
-            }
-            .accessibilityLabel("Audio quality detail")
-        }
-        .foregroundStyle(Theme.Palette.textPrimary)
-        .padding(.horizontal, Theme.Space.sm)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: Capsule())
-    }
-
-    private var routeName: String {
-        switch session.outputRoute.kind {
-        case .bluetoothA2DP:  return "Bluetooth"
-        case .airPlay:        return "AirPlay"
-        case .usbAudio:       return "USB"
-        case .wiredLineOut:   return "Wired"
-        case .builtInSpeaker: return "Phone speaker"
-        case .other:          return "Output"
-        }
-    }
-
-    private var routeIcon: String {
-        switch session.outputRoute.kind {
-        case .bluetoothA2DP:  return "hifispeaker.fill"
-        case .airPlay:        return "airplayaudio"
-        case .usbAudio:       return "cable.connector"
-        case .wiredLineOut:   return "headphones"
-        case .builtInSpeaker: return "iphone"
-        case .other:          return "speaker.wave.2"
         }
     }
 
