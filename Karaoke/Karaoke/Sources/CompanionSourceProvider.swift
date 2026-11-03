@@ -160,6 +160,30 @@ final class CompanionSourceProvider: SourceProvider, @unchecked Sendable {
         )
     }
 
+    // MARK: HLS manifest (video + full-quality audio)
+
+    /// URL of a master playlist pairing video with the same audio itag the
+    /// audio-only path uses, so the karaoke words on screen cost no bitrate.
+    ///
+    /// Returns nil rather than throwing when the companion is not configured:
+    /// video is an enhancement, and playback must fall back to audio-only
+    /// without the caller treating it as a failure.
+    func hlsManifestURL(for songID: SongID, minHeight: Int = 720) -> URL? {
+        guard let base = baseURL,
+              var components = URLComponents(
+                url: base.appendingPathComponent("hls-manifest"),
+                resolvingAgainstBaseURL: false
+              )
+        else {
+            return nil
+        }
+        components.queryItems = [
+            URLQueryItem(name: "id", value: songID),
+            URLQueryItem(name: "minHeight", value: String(minHeight))
+        ]
+        return components.url
+    }
+
     // MARK: SourceProvider — renditions
 
     func audioRenditions(for songID: SongID) async throws(SourceError) -> [AudioRendition] {

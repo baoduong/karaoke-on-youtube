@@ -13,6 +13,7 @@
 //
 // Satisfies: FR-005, FR-007, FR-008, FR-014, FR-017, FR-018, FR-019, FR-030
 
+import AVFoundation
 import Foundation
 import Observation
 import SwiftData
@@ -248,6 +249,51 @@ final class PlaybackSession {
             transition(to: .failed(PlaybackError.from(audioError: audioError)))
         } catch {
             transition(to: .failed(.mechanismFailed(detail: error.localizedDescription)))
+        }
+    }
+
+    /// The player the video layer renders. Rendering a second player would
+    /// mean two clocks and a sync problem that does not otherwise exist.
+    var videoPlayer: AVPlayer? {
+        (pipeline as? PlayerPipeline)?.player
+    }
+
+    /// Play through an HLS master playlist, which carries the source video
+    /// alongside the same audio itag the audio-only path uses (FR-021).
+    ///
+    /// A saved local copy still wins: it starts faster and works offline, and
+    /// it is audio-only by design.
+    func playHLS(songID: String, manifestURL: URL, rendition: AudioRendition) async {
+        if localURL(for: songID) != nil {
+            await play(songID: songID, rendition: rendition)
+            return
+        }
+
+        self.songID = songID
+        self.selectedRendition = rendition
+        self.halfwayReached = false
+        transition(to: .resolving)
+
+        if !isNetworkAvailable() {
+            transition(to: .failed(.offlineUnsaved))
+            return
+        }
+
+        do {
+            transition(to: .buffering)
+            try pipeline.prepare()
+            try await pipeline.load(source: .hls(manifestURL))
+            try pipeline.play()
+            transition(to: .playing)
+        } catch {
+            // Video is an enhancement. If the manifest will not play, fall
+            // back to audio-only rather than failing the song outright.
+            DiagnosticLog.recordEnvironmentError(
+                .offline,
+                songID: songID,
+                providerID: SourceProviderID(rawValue: "PlaybackSession.hls")
+            )
+            await play(songID: songID, rendition: rendition)
         }
     }
 

@@ -20,6 +20,14 @@ enum AudioSource: Sendable {
     case remote(StreamAddress)
     /// A locally saved rendition (FR-030).
     case local(URL)
+    /// An HLS master playlist carrying video alongside full-quality audio.
+    ///
+    /// Most karaoke uploads burn the words into the picture, so the video is
+    /// the lyrics (FR-021). YouTube's single muxed format would cost two
+    /// thirds of the audio bitrate; its HLS audio variant is the same itag
+    /// the audio-only path already uses, so this carries video at no audio
+    /// cost, and AVFoundation handles A/V sync itself.
+    case hls(URL)
 }
 
 // MARK: - PlaybackPosition

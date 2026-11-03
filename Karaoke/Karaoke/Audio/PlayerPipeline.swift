@@ -57,7 +57,10 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
 
     // MARK: Private state (all accessed on main actor)
 
-    private let player = AVPlayer()
+    /// Exposed so the video layer can render this exact player's output.
+    /// A second AVPlayer would mean two clocks and a sync problem nobody
+    /// asked for.
+    let player = AVPlayer()
     private let sessionController: AudioSessionController
     private let routeMonitor: OutputRouteMonitor
 
@@ -121,6 +124,8 @@ final class PlayerPipeline: AudioPipeline, @unchecked Sendable {
             url = address.url
         case .local(let localURL):
             url = localURL
+        case .hls(let manifestURL):
+            url = manifestURL
         }
 
         do {

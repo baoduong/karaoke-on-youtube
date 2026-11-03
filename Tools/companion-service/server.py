@@ -117,6 +117,75 @@ def metadata(video_id: str) -> dict:
     }
 
 
+MIN_VIDEO_HEIGHT = 720
+
+
+def hls_manifest(video_id: str, min_height: int = MIN_VIDEO_HEIGHT) -> str:
+    """
+    Build an HLS master playlist pairing YouTube's video variants with its
+    high-quality audio variant.
+
+    Most karaoke uploads burn the words into the picture, so the video is the
+    lyrics. The obvious way to get both — YouTube's single muxed format,
+    itag 18 — carries audio at only 44 kbps against itag 140's 129 kbps, which
+    is audible on a PA at volume.
+
+    HLS avoids the trade entirely: its audio variant is backed by itag 140, so
+    the stream carries full-quality audio *and* video, and AVFoundation
+    handles A/V sync natively rather than us synchronising two players.
+
+    Only H.264 variants are offered. VP9 appears at the same resolutions but
+    is not reliably hardware-decoded on Apple platforms, and dropping to
+    software decode during a two-hour session is not worth the bitrate.
+    """
+    info = run_ytdlp([
+        f"https://www.youtube.com/watch?v={video_id}",
+        "--dump-json", "--skip-download",
+    ])
+
+    audio_url = None
+    videos = []
+    for fmt in info.get("formats", []):
+        if "m3u8" not in str(fmt.get("protocol", "")):
+            continue
+        has_video = fmt.get("vcodec", "none") != "none"
+        if not has_video:
+            # 234 is the high-quality audio variant; 233 is the low one.
+            if fmt.get("format_id") == "234":
+                audio_url = fmt.get("url")
+            continue
+        height = fmt.get("height") or 0
+        vcodec = str(fmt.get("vcodec") or "")
+        if height >= min_height and vcodec.startswith("avc1"):
+            videos.append(fmt)
+
+    if not audio_url:
+        raise LookupError("no HLS audio variant available for this video")
+    if not videos:
+        raise LookupError(f"no H.264 HLS video variant at {min_height}p or above")
+
+    videos.sort(key=lambda f: f.get("height") or 0)
+
+    lines = [
+        "#EXTM3U",
+        "#EXT-X-VERSION:3",
+        "#EXT-X-INDEPENDENT-SEGMENTS",
+        f'#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Audio",'
+        f'DEFAULT=YES,AUTOSELECT=YES,URI="{audio_url}"',
+    ]
+    for fmt in videos:
+        video_kbps = fmt.get("tbr") or 0
+        bandwidth = int((video_kbps + 130) * 1000)
+        lines.append(
+            f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},"
+            f'RESOLUTION={fmt.get("width")}x{fmt.get("height")},'
+            f'CODECS="{fmt.get("vcodec")},mp4a.40.2",AUDIO="aud"'
+        )
+        lines.append(fmt.get("url"))
+
+    return "\n".join(lines) + "\n"
+
+
 def resolve_renditions(video_id: str) -> dict:
     """
     Return all audio-only renditions for a video.
@@ -302,6 +371,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, metadata(video_id))
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
+
+        elif path == "/hls-manifest":
+            video_id = params.get("id", [None])[0]
+            if not video_id:
+                self._json(400, {"error": "missing id parameter"})
+                return
+            try:
+                min_height = int(params.get("minHeight", [str(MIN_VIDEO_HEIGHT)])[0])
+            except ValueError:
+                self._json(400, {"error": "minHeight must be an integer"})
+                return
+            try:
+                body = hls_manifest(video_id, min_height).encode()
+            except LookupError as exc:
+                self._json(404, {"error": str(exc)})
+                return
+            except Exception as exc:
+                self._json(500, {"error": str(exc)})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         elif path == "/resolve-renditions":
             video_id = params.get("id", [None])[0]

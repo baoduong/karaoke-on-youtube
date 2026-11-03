@@ -24,6 +24,7 @@ struct RootView: View {
     private let saveCoordinator: SaveCoordinator
     private let suggestionEngine: BlendedRecommendationEngine
     private let lyricsProvider: LyricsProvider
+    private let companion = CompanionSourceProvider()
 
     @State private var pendingSong: SongMetadata?
     @State private var showPlayer = false
@@ -122,6 +123,10 @@ struct RootView: View {
                         session.stop()
                     }
 
+                    SourceVideoView(player: session.videoPlayer)
+                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                        .padding(.top, 12)
+
                     LyricsView(viewModel: lyrics, fontScale: settings.lyricsFontScale)
                         .padding(.top, 12)
 
@@ -162,7 +167,14 @@ struct RootView: View {
         do {
             let renditions = try await router.audioRenditions(for: song.id)
             let selected = try RenditionSelection.select(from: renditions, songID: song.id)
-            await session.play(songID: song.id, rendition: selected)
+            // Video carries the words on most karaoke uploads, and the HLS
+            // audio variant is the same itag as the audio-only path, so this
+            // is free (FR-021). No companion configured means no video.
+            if let manifest = companion.hlsManifestURL(for: song.id) {
+                await session.playHLS(songID: song.id, manifestURL: manifest, rendition: selected)
+            } else {
+                await session.play(songID: song.id, rendition: selected)
+            }
             await refreshSuggestions(for: song.id)
             await loadLyrics(for: song)
         } catch {
