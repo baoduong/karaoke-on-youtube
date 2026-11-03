@@ -20,6 +20,10 @@ DerivedData/
 # project.yml is the source of truth and IS committed.
 Karaoke/Karaoke.xcodeproj/
 
+# Python bytecode from the companion service
+__pycache__/
+*.pyc
+
 # Swift Package Manager
 .build/
 .swiftpm/

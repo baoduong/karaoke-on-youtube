@@ -11,10 +11,45 @@ On-device resolution (`OnDeviceSourceProvider`) depends on undocumented YouTube 
 | Method | Path | Query params | Response |
 |--------|------|-------------|----------|
 | GET | `/health` | — | `{"status":"ok"}` |
+| GET | `/search` | `q=<query>&limit=<n>` | `{"results":[...]}` |
+| GET | `/metadata` | `id=<videoID>` | `{"id":"...","title":"...","channelName":"...","durationSeconds":N}` |
+| GET | `/related` | `id=<videoID>&limit=<n>` | `{"results":[...]}` — karaoke-filtered |
+| GET | `/hls-manifest` | `id=<videoID>&minHeight=<px>` | an HLS master playlist, `application/vnd.apple.mpegurl` |
 | GET | `/resolve-renditions` | `id=<videoID>` | `{"renditions":[...]}` |
 | GET | `/resolve-address` | `id=<videoID>&itag=<itag>` | `{"url":"...","renditionItag":N,"expiresAt":N,"resolvedAt":N,"supportsRangeRequests":true}` |
 
 Response shapes match the iOS `SourceProvider` protocol exactly.
+
+The service is threaded. A prewarm request takes seconds, and on a
+single-threaded server it would sit in front of the tap the singer just made.
+
+## Manifest cache
+
+`/hls-manifest` is the only cached endpoint. Building a manifest runs
+`yt-dlp` and measures 3–4 s, so the app warms the cache for the next songs
+in the queue and the first suggestions while the current one plays.
+
+What is cached is **not media** — it is roughly 4 KB of text per song, a
+playlist naming three `googlevideo.com` URLs. The audio and video never pass
+through this service; the phone fetches them from Google directly.
+
+Entries expire from the `expire` stamp carried in those URLs, minus a 15
+minute margin so a song starting near the edge still has live URLs for its
+whole length. A per-song lock means a prewarm and a tap racing for the same
+song run `yt-dlp` once, not twice.
+
+### Known limitation, if this is ever extended
+
+The cache has no bound and no eviction. `_MANIFEST_CACHE` and
+`_MANIFEST_KEY_LOCKS` only ever grow: an expired entry stops being served but
+is never deleted, and every song ever requested keeps its lock object.
+
+At ~4 KB per song this is roughly 4 MB per thousand songs, which does not
+matter for a service that is started for a party and stopped afterwards — the
+intended use. It would matter for a long-lived or shared deployment.
+
+The fix is small and deliberately not done yet: sweep expired keys out of both
+dictionaries when writing a new entry, or cap the cache and evict the oldest.
 
 ## Prerequisites
 

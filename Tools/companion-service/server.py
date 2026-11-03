@@ -21,10 +21,11 @@ import argparse
 import json
 import subprocess
 import sys
+import threading
 import time
 import re
 import urllib.request
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 TIMEOUT_SECONDS = 30
@@ -385,6 +386,76 @@ def hls_manifest(video_id: str, min_height: int = MIN_VIDEO_HEIGHT) -> str:
     return "\n".join(lines) + "\n"
 
 
+_MANIFEST_CACHE: dict[tuple[str, int], tuple[str, float]] = {}
+_MANIFEST_KEY_LOCKS: dict[tuple[str, int], threading.Lock] = {}
+_MANIFEST_REGISTRY_LOCK = threading.Lock()
+# HLS playlist URLs carry the expiry as a path segment, /expire/<unix>/, while
+# progressive videoplayback URLs use an expire= query parameter. Both forms
+# show up in this service, so look for either.
+_EXPIRE_IN_PATH = re.compile(r"/expire/(\d+)")
+_EXPIRE_IN_QUERY = re.compile(r"[?&]expire=(\d+)")
+
+# Google stamps each stream URL with its own expiry. Stop serving a manifest
+# well before then, so a song that starts near the edge still has a live URL
+# for its whole length — a karaoke track runs five minutes or so.
+_MANIFEST_SAFETY_SECONDS = 900
+
+
+def _manifest_expiry(manifest: str, resolved_at: float) -> float:
+    stamps = [
+        float(value)
+        for value in _EXPIRE_IN_PATH.findall(manifest) + _EXPIRE_IN_QUERY.findall(manifest)
+    ]
+    if not stamps:
+        return resolved_at + 300
+    # The floor matters: when the margin is wider than the remaining life, the
+    # subtraction lands in the past and every entry is born expired.
+    return max(resolved_at + 60, min(stamps) - _MANIFEST_SAFETY_SECONDS)
+
+
+def _manifest_hit(key: tuple[str, int]) -> str | None:
+    with _MANIFEST_REGISTRY_LOCK:
+        entry = _MANIFEST_CACHE.get(key)
+    if entry and entry[1] > time.time():
+        return entry[0]
+    return None
+
+
+def _manifest_key_lock(key: tuple[str, int]) -> threading.Lock:
+    with _MANIFEST_REGISTRY_LOCK:
+        return _MANIFEST_KEY_LOCKS.setdefault(key, threading.Lock())
+
+
+def cached_hls_manifest(video_id: str, min_height: int) -> str:
+    """
+    Serve a manifest from memory when one is still valid.
+
+    Building a manifest runs yt-dlp and costs about three seconds, which the
+    singer waits through before hearing anything. The app warms this cache for
+    songs it expects next, so the common case is a tap on a manifest that is
+    already built.
+
+    The per-key lock does the other half of the work: when a prewarm and a tap
+    race for the same song, the second caller waits for the first rather than
+    starting a second yt-dlp run, and then finds the result in the cache.
+    """
+    key = (video_id, min_height)
+
+    hit = _manifest_hit(key)
+    if hit is not None:
+        return hit
+
+    with _manifest_key_lock(key):
+        hit = _manifest_hit(key)
+        if hit is not None:
+            return hit
+
+        manifest = hls_manifest(video_id, min_height)
+        with _MANIFEST_REGISTRY_LOCK:
+            _MANIFEST_CACHE[key] = (manifest, _manifest_expiry(manifest, time.time()))
+        return manifest
+
+
 def resolve_renditions(video_id: str) -> dict:
     """
     Return all audio-only renditions for a video.
@@ -539,7 +610,21 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        parsed = urlparse(self.path)
+        started = time.time()
+        try:
+            self._route(urlparse(self.path))
+        finally:
+            # Path and duration only. The default access log prints the whole
+            # request line, and a cached stream URL in a log file outlives the
+            # URL's own expiry.
+            if urlparse(self.path).path != "/health":
+                print(
+                    f"{urlparse(self.path).path} {time.time() - started:.2f}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    def _route(self, parsed):
         path = parsed.path
         params = parse_qs(parsed.query)
 
@@ -603,7 +688,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": "minHeight must be an integer"})
                 return
             try:
-                body = hls_manifest(video_id, min_height).encode()
+                body = cached_hls_manifest(video_id, min_height).encode()
             except LookupError as exc:
                 self._json(404, {"error": str(exc)})
                 return
@@ -670,7 +755,9 @@ def main():
     parser.add_argument("--port", type=int, default=7979, help="Port (default: 7979)")
     args = parser.parse_args()
 
-    server = HTTPServer((args.host, args.port), Handler)
+    # Threaded so a prewarm request, which takes seconds, cannot sit in front
+    # of the tap the singer just made.
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Companion service listening on {args.host}:{args.port}")
     print("Endpoints: /health  /resolve-renditions?id=  /resolve-address?id=&itag=")
     try:
