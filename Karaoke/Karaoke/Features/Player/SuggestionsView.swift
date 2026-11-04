@@ -67,7 +67,7 @@ struct SuggestionsView: View {
             ProgressView()
                 .tint(Theme.Palette.accent)
             Text("Finding suggestions…")
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
             Spacer()
         }
@@ -136,7 +136,7 @@ private struct SuggestionRow: View {
                 reasonBadge
 
                 Text(songTitle)
-                    .font(.body.weight(.medium))
+                    .font(Theme.Typography.rowTitle)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -154,7 +154,7 @@ private struct SuggestionRow: View {
                             .monospacedDigit()
                     }
                 }
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
             }
 
@@ -166,7 +166,7 @@ private struct SuggestionRow: View {
                     onAddToQueue?()
                 } label: {
                     Image(systemName: "text.badge.plus")
-                        .font(.body.weight(.semibold))
+                        .font(Theme.Typography.bodyEmphasis)
                         .foregroundStyle(Theme.Palette.textPrimary)
                         .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
                         .background(Theme.Palette.surfaceRaised, in: Circle())
@@ -178,7 +178,7 @@ private struct SuggestionRow: View {
                     onPlayNow?()
                 } label: {
                     Image(systemName: "play.fill")
-                        .font(.body.weight(.semibold))
+                        .font(Theme.Typography.bodyEmphasis)
                         .foregroundStyle(.black)
                         .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
                         .background(Theme.Palette.accent, in: Circle())
@@ -197,9 +197,9 @@ private struct SuggestionRow: View {
     private var reasonBadge: some View {
         HStack(spacing: Theme.Space.xs) {
             Image(systemName: strategyIcon)
-                .font(.caption2.weight(.semibold))
+                .font(Theme.Typography.caption)
             Text(suggestion.reason)
-                .font(.caption2.weight(.semibold))
+                .font(Theme.Typography.caption)
                 .lineLimit(1)
         }
         .foregroundStyle(Theme.Palette.accent)

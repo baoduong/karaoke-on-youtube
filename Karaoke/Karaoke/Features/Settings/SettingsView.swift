@@ -50,9 +50,11 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 HStack {
                     Text("Output Volume")
+                        .font(Theme.Typography.body)
                         .foregroundStyle(Theme.Palette.textPrimary)
                     Spacer()
                     Text(String(format: "%.0f%%", settings.outputVolume * 100))
+                        .font(Theme.Typography.timecode)
                         .foregroundStyle(Theme.Palette.textSecondary)
                         .monospacedDigit()
                 }
@@ -105,14 +107,14 @@ struct SettingsView: View {
                     }
 
                 Text("The companion service resolves audio server-side. Use it when on-device resolution breaks.")
-                    .font(.caption)
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
             .padding(Theme.Space.md)
             .card(Theme.Palette.surface)
 
             Text("Run Tools/companion-service/run.sh on your Mac. Enter the Mac's local IP address above.")
-                .font(.caption)
+                .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textTertiary)
                 .padding(.horizontal, Theme.Space.xs)
         }
@@ -124,7 +126,7 @@ struct SettingsView: View {
                 .fill(companionReachability.dotColor)
                 .frame(width: 8, height: 8)
             Text(companionReachability.label)
-                .font(.caption.weight(.medium))
+                .font(Theme.Typography.caption)
                 .foregroundStyle(companionReachability.textColor)
         }
         .padding(.horizontal, Theme.Space.sm)
@@ -172,13 +174,14 @@ struct SettingsView: View {
                     }
 
                     Text("Signing Validity")
+                        .font(Theme.Typography.body)
                         .foregroundStyle(Theme.Palette.textPrimary)
 
                     Spacer()
 
                     if let days = remainingDays {
                         Text("\(days)d remaining")
-                            .font(.subheadline.weight(isExpiringSoon ? .semibold : .regular).monospacedDigit())
+                            .font(Theme.Typography.caption)
                             .foregroundStyle(signingBadgeColor(days: days))
                             .padding(.horizontal, Theme.Space.sm)
                             .padding(.vertical, Theme.Space.xs)
@@ -186,7 +189,7 @@ struct SettingsView: View {
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Palette.textTertiary)
                 }
                 .padding(Theme.Space.md)

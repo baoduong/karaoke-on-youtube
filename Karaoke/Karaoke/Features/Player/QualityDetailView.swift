@@ -116,17 +116,17 @@ struct QualityDetailView: View {
                 if outputRoute.degradesQuality {
                     HStack(alignment: .top, spacing: Theme.Space.md) {
                         Image(systemName: "info.circle.fill")
-                            .font(.body)
+                            .font(Theme.Typography.body)
                             .foregroundStyle(Theme.Palette.accentDim)
                             .padding(.top, 2)
 
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text("Quality Degraded")
-                                .font(.subheadline.weight(.semibold))
+                                .font(Theme.Typography.bodyEmphasis)
                                 .foregroundStyle(Theme.Palette.textPrimary)
 
                             Text("This route re-encodes the audio before transmitting it. The actual quality is lower than the rendition bitrate suggests.")
-                                .font(.caption)
+                                .font(Theme.Typography.caption)
                                 .foregroundStyle(Theme.Palette.textSecondary)
                         }
 
@@ -137,11 +137,11 @@ struct QualityDetailView: View {
                 } else {
                     HStack(spacing: Theme.Space.md) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.body)
+                            .font(Theme.Typography.body)
                             .foregroundStyle(Theme.Palette.success)
 
                         Text("No quality degradation")
-                            .font(.subheadline.weight(.medium))
+                            .font(Theme.Typography.secondary)
                             .foregroundStyle(Theme.Palette.textPrimary)
 
                         Spacer(minLength: 0)
@@ -160,10 +160,10 @@ struct QualityDetailView: View {
     private func metricTile(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Text(title)
-                .font(.caption)
+                .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textTertiary)
             Text(value)
-                .font(.headline.monospacedDigit())
+                .font(Theme.Typography.rowTitle)
                 .foregroundStyle(Theme.Palette.accent)
                 .lineLimit(1)
         }
@@ -175,11 +175,11 @@ struct QualityDetailView: View {
     private func detailRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
             Spacer()
             Text(value)
-                .font(.subheadline.weight(.medium).monospacedDigit())
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textPrimary)
         }
     }

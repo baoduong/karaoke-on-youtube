@@ -69,7 +69,7 @@ struct SearchView: View {
 
             Button(action: submit) {
                 Text("Search")
-                    .font(.headline)
+                    .font(Theme.Typography.bodyEmphasis)
                     .padding(.horizontal, Theme.Space.lg)
                     .frame(height: Theme.Hit.control)
             }
@@ -127,7 +127,7 @@ struct SearchView: View {
             ProgressView()
                 .tint(Theme.Palette.accent)
             Text("Searching…")
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,20 +159,20 @@ struct SearchView: View {
     private func errorState(_ error: SearchError) -> some View {
         VStack(spacing: Theme.Space.md) {
             Image(systemName: error.isMechanismSide ? "wrench.and.screwdriver.fill" : "exclamationmark.circle")
-                .font(.system(size: 40))
+                .font(Theme.Typography.glyphEmpty)
                 .foregroundStyle(error.isMechanismSide ? Theme.Palette.mechanismIssue : Theme.Palette.contentIssue)
 
             Text(error.isMechanismSide ? "Search isn't working" : "Nothing found")
-                .font(.headline)
+                .font(Theme.Typography.screenTitle)
                 .foregroundStyle(Theme.Palette.textPrimary)
 
             Text(error.message)
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button("Try Again", action: submit)
-                .font(.headline)
+                .font(Theme.Typography.bodyEmphasis)
                 .padding(.horizontal, Theme.Space.lg)
                 .frame(height: Theme.Hit.minimum)
                 .card(Theme.Palette.surfaceRaised)
@@ -202,7 +202,7 @@ struct SongResultRow: View {
 
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(song.title)
-                    .font(.body.weight(.medium))
+                    .font(Theme.Typography.rowTitle)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -214,7 +214,7 @@ struct SongResultRow: View {
                     Text(song.durationSeconds.asDurationLabel)
                         .monospacedDigit()
                 }
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
             }
 

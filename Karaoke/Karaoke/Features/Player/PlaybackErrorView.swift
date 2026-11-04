@@ -53,7 +53,7 @@ struct PlaybackErrorView: View {
     private var contentErrorCard: some View {
         VStack(spacing: Theme.Space.lg) {
             Text("SONG ISSUE")
-                .font(.caption.weight(.bold))
+                .font(Theme.Typography.caption)
                 .tracking(0.8)
                 .foregroundStyle(Theme.Palette.contentIssue)
                 .padding(.horizontal, Theme.Space.md)
@@ -66,18 +66,18 @@ struct PlaybackErrorView: View {
                     .frame(width: 72, height: 72)
 
                 Image(systemName: iconName)
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(Theme.Typography.glyphStatus)
                     .foregroundStyle(Theme.Palette.contentIssue)
             }
 
             VStack(spacing: Theme.Space.sm) {
                 Text(errorTitle)
-                    .font(.title3.weight(.semibold))
+                    .font(Theme.Typography.screenTitle)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(errorMessage)
-                    .font(.body)
+                    .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Palette.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -89,7 +89,7 @@ struct PlaybackErrorView: View {
                             Image(systemName: "magnifyingglass")
                             Text("Pick Another Song")
                         }
-                        .font(.headline)
+                        .font(Theme.Typography.bodyEmphasis)
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: Theme.Hit.control)
@@ -104,7 +104,7 @@ struct PlaybackErrorView: View {
                 if let retry = onRetry {
                     Button(action: retry) {
                         Text("Try Again")
-                            .font(.subheadline.weight(.semibold))
+                            .font(Theme.Typography.bodyEmphasis)
                             .foregroundStyle(Theme.Palette.textSecondary)
                             .frame(maxWidth: .infinity)
                             .frame(height: Theme.Hit.minimum)
@@ -129,9 +129,9 @@ struct PlaybackErrorView: View {
         VStack(spacing: Theme.Space.lg) {
             HStack(spacing: Theme.Space.xs) {
                 Image(systemName: "wrench.and.screwdriver.fill")
-                    .font(.caption2.weight(.bold))
+                    .font(Theme.Typography.caption)
                 Text("APP FAULT")
-                    .font(.caption.weight(.bold))
+                    .font(Theme.Typography.caption)
                     .tracking(0.8)
             }
             .foregroundStyle(Theme.Palette.mechanismIssue)
@@ -145,18 +145,18 @@ struct PlaybackErrorView: View {
                     .frame(width: 72, height: 72)
 
                 Image(systemName: iconName)
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(Theme.Typography.glyphStatus)
                     .foregroundStyle(Theme.Palette.mechanismIssue)
             }
 
             VStack(spacing: Theme.Space.sm) {
                 Text(errorTitle)
-                    .font(.title3.weight(.semibold))
+                    .font(Theme.Typography.screenTitle)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(errorMessage)
-                    .font(.body)
+                    .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Palette.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -170,7 +170,7 @@ struct PlaybackErrorView: View {
                             Image(systemName: "arrow.clockwise")
                             Text("Try Again")
                         }
-                        .font(.headline)
+                        .font(Theme.Typography.bodyEmphasis)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: Theme.Hit.control)
@@ -185,7 +185,7 @@ struct PlaybackErrorView: View {
                 if let dismiss = onDismiss {
                     Button(action: dismiss) {
                         Text("Dismiss")
-                            .font(.subheadline.weight(.semibold))
+                            .font(Theme.Typography.bodyEmphasis)
                             .foregroundStyle(Theme.Palette.textSecondary)
                             .frame(maxWidth: .infinity)
                             .frame(height: Theme.Hit.minimum)
@@ -269,7 +269,7 @@ struct PlaybackErrorView: View {
             Image(systemName: "info.circle.fill")
                 .foregroundStyle(Theme.Palette.mechanismIssue)
             Text("This is a technical issue. Check the diagnostic log for details.")
-                .font(.caption)
+                .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textSecondary)
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 0)

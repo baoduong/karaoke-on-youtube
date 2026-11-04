@@ -160,7 +160,7 @@ private struct QueueRowView: View {
 
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(songTitle)
-                    .font(entry.state == .current ? .body.weight(.semibold) : .body.weight(.medium))
+                    .font(Theme.Typography.rowTitle)
                     .foregroundStyle(titleColor)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -168,7 +168,7 @@ private struct QueueRowView: View {
                 HStack(spacing: Theme.Space.sm) {
                     if let badge = stateBadgeText {
                         Text(badge)
-                            .font(.caption.weight(.semibold))
+                            .font(Theme.Typography.caption)
                             .foregroundStyle(badgeForegroundColor)
                             .padding(.horizontal, Theme.Space.sm)
                             .padding(.vertical, 2)
@@ -188,7 +188,7 @@ private struct QueueRowView: View {
                             .monospacedDigit()
                     }
                 }
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(subtitleColor)
             }
 
@@ -341,7 +341,7 @@ private struct QueueRowView: View {
                         .foregroundStyle(Theme.Palette.mechanismIssue)
                 }
             }
-            .font(.subheadline.weight(.semibold))
+            .font(Theme.Typography.secondary)
         }
     }
 

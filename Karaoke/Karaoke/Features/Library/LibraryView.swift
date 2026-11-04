@@ -159,25 +159,25 @@ private struct LibraryCollectionRow: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.headline)
+                    .font(Theme.Typography.secondary)
                     .foregroundStyle(iconColor)
             }
 
             Text(title)
-                .font(.body.weight(.semibold))
+                .font(Theme.Typography.bodyEmphasis)
                 .foregroundStyle(Theme.Palette.textPrimary)
 
             Spacer()
 
             Text("\(count)")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textSecondary)
                 .padding(.horizontal, Theme.Space.sm)
                 .padding(.vertical, Theme.Space.xs)
                 .background(Theme.Palette.surfaceRaised, in: Capsule())
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textTertiary)
         }
         .padding(Theme.Space.md)
@@ -258,14 +258,14 @@ private struct FavouriteRowView: View {
     var body: some View {
         HStack(spacing: Theme.Space.md) {
             Image(systemName: "heart.fill")
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.accent)
                 .frame(width: 32, height: 32)
                 .background(Theme.Palette.accent.opacity(0.14), in: Circle())
 
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(songTitle)
-                    .font(.body.weight(.medium))
+                    .font(Theme.Typography.rowTitle)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -283,7 +283,7 @@ private struct FavouriteRowView: View {
                             .monospacedDigit()
                     }
                 }
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
             }
 
@@ -291,7 +291,7 @@ private struct FavouriteRowView: View {
 
             Button(action: onAddToQueue) {
                 Image(systemName: "text.badge.plus")
-                    .font(.body.weight(.semibold))
+                    .font(Theme.Typography.bodyEmphasis)
                     .foregroundStyle(Theme.Palette.accent)
                     .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
                     .background(Theme.Palette.surfaceRaised, in: Circle())

@@ -37,14 +37,14 @@ struct PlayerView: View {
     private var songInfo: some View {
         VStack(spacing: Theme.Space.xs) {
             Text(song?.title ?? "Nothing playing")
-                .font(.title3.weight(.semibold))
+                .font(Theme.Typography.displayTitle)
                 .foregroundStyle(Theme.Palette.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
             if let channel = song?.channelName, !channel.isEmpty {
                 Text(channel)
-                    .font(.subheadline)
+                    .font(Theme.Typography.secondary)
                     .foregroundStyle(Theme.Palette.textSecondary)
                     .lineLimit(1)
             }
@@ -67,7 +67,7 @@ struct PlayerView: View {
                 if isPlaying { session.pause() } else { session.resume() }
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(Theme.Typography.glyphPrimary)
                     .foregroundStyle(.black)
                     .frame(width: Theme.Hit.primaryControl, height: Theme.Hit.primaryControl)
                     .background(Theme.Palette.accent, in: Circle())
@@ -83,7 +83,7 @@ struct PlayerView: View {
     private func transportButton(_ systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 26, weight: .medium))
+                .font(Theme.Typography.glyphTransport)
                 .foregroundStyle(Theme.Palette.textPrimary)
                 .frame(width: Theme.Hit.control, height: Theme.Hit.control)
         }

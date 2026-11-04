@@ -31,7 +31,7 @@ struct PlayerVideoStage: View {
                             startingIndicator
                         } else {
                             Image(systemName: "music.note.tv")
-                                .font(.system(size: 44, weight: .light))
+                                .font(Theme.Typography.glyphEmpty)
                                 .foregroundStyle(Theme.Palette.textTertiary)
                         }
                     }
@@ -51,7 +51,7 @@ struct PlayerVideoStage: View {
             ProgressView()
                 .tint(Theme.Palette.accent)
             Text("Starting…")
-                .font(.subheadline)
+                .font(Theme.Typography.secondary)
                 .foregroundStyle(Theme.Palette.textSecondary)
         }
     }
@@ -64,18 +64,18 @@ struct PlayerVideoStage: View {
     private var routeBadge: some View {
         HStack(spacing: Theme.Space.xs) {
             Image(systemName: routeIcon)
-                .font(.caption2)
+                .font(Theme.Typography.caption)
             Text(routeName)
-                .font(.caption2.weight(.medium))
+                .font(Theme.Typography.caption)
                 .lineLimit(1)
             if route.degradesQuality {
                 Text("re-encoded")
-                    .font(.caption2)
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
             Button(action: onShowQualityDetail) {
                 Image(systemName: "info.circle")
-                    .font(.caption2)
+                    .font(Theme.Typography.caption)
             }
             .accessibilityLabel("Audio quality detail")
         }

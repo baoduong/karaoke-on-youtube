@@ -28,11 +28,23 @@ enum Theme {
         static let textTertiary = Color.white.opacity(0.38)
 
         /// Content-side problems: the song is unusable, the singer picks
-        /// another. Amber, because nothing is broken.
-        static let contentIssue = Color(red: 0.95, green: 0.64, blue: 0.22)
+        /// another. Red-orange, distinct in hue from `accent` (amber) so
+        /// "selected" and "content problem" are not confused (FR-021).
+        /// Previously `rgb(0.95, 0.64, 0.22)` — the same amber hue as `accent`
+        /// — which made the two states look alike.
+        static let contentIssue = Color(red: 1.0, green: 0.42, blue: 0.20)
         /// Mechanism-side problems: our code stopped working. Red, because
         /// someone has to fix it.
+        ///
+        /// Re-check against the new `contentIssue` (red-orange). If the two
+        /// read alike, move this to `Color(red: 1.0, green: 0.27, blue: 0.33)`
+        /// — a cooler red that sits clearly apart from the red-orange above.
         static let mechanismIssue = Color(red: 0.91, green: 0.33, blue: 0.33)
+        /// The label colour for text and glyphs placed on a filled accent
+        /// control. White on the amber accent measures about 1.9:1 and fails
+        /// the 4.5:1 contrast floor (FR-023). This value equals `background`
+        /// and measures about 10.9:1 against the accent.
+        static let onAccent = Color(red: 0.055, green: 0.055, blue: 0.067)
         static let success = Color(red: 0.36, green: 0.78, blue: 0.52)
     }
 
@@ -58,6 +70,104 @@ enum Theme {
         static let minimum: CGFloat = 44
         static let control: CGFloat = 56
         static let primaryControl: CGFloat = 76
+    }
+
+    // MARK: Typography tokens
+
+    /// A typographic role expressed as data rather than as a `Font`.
+    ///
+    /// Constraints (FR-015):
+    /// - `baseSize` MUST be at least 13. Smaller text is unreadable in a dim
+    ///   room at arm's length.
+    /// - `weight` MUST NOT be lighter than `.regular`. Thin strokes disappear
+    ///   in a dim room.
+    ///
+    /// Roles are resolved to a `Font` inside a `ViewModifier` via
+    /// `@ScaledMetric(relativeTo:)` — see `Theme.Typography` and
+    /// `TypographyModifier`. They MUST NOT be exposed as `static let Font`
+    /// values because `@ScaledMetric` is a `DynamicProperty` and only resolves
+    /// inside a view (contract C-T2).
+    struct TypeToken: Sendable, Equatable {
+        let baseSize: CGFloat
+        let weight: Font.Weight
+        let design: Font.Design
+        let relativeTo: Font.TextStyle
+        let maxDynamicTypeSize: DynamicTypeSize?
+
+        init(
+            baseSize: CGFloat,
+            weight: Font.Weight,
+            design: Font.Design = .default,
+            relativeTo: Font.TextStyle,
+            maxDynamicTypeSize: DynamicTypeSize? = nil
+        ) {
+            self.baseSize = baseSize
+            self.weight = weight
+            self.design = design
+            self.relativeTo = relativeTo
+            self.maxDynamicTypeSize = maxDynamicTypeSize
+        }
+    }
+
+    // MARK: Named scale
+
+    enum Typography {
+        // Text roles
+        static let displayTitle  = TypeToken(baseSize: 28, weight: .bold,     relativeTo: .title,      maxDynamicTypeSize: .xxxLarge)
+        static let screenTitle   = TypeToken(baseSize: 22, weight: .bold,     relativeTo: .title2)
+        static let rowTitle      = TypeToken(baseSize: 17, weight: .semibold,  relativeTo: .headline)
+        static let body          = TypeToken(baseSize: 17, weight: .regular,   relativeTo: .body)
+        static let bodyEmphasis  = TypeToken(baseSize: 17, weight: .semibold,  relativeTo: .body)
+        static let secondary     = TypeToken(baseSize: 15, weight: .regular,   relativeTo: .subheadline)
+        static let caption       = TypeToken(baseSize: 13, weight: .medium,    relativeTo: .caption)
+        /// Monospaced so digits do not jitter as the timecode counts.
+        static let timecode      = TypeToken(baseSize: 17, weight: .semibold,  design: .monospaced, relativeTo: .body)
+
+        // Glyph roles
+        static let glyphPrimary   = TypeToken(baseSize: 30, weight: .semibold, relativeTo: .title,      maxDynamicTypeSize: .xxxLarge)
+        static let glyphTransport = TypeToken(baseSize: 26, weight: .semibold, relativeTo: .title2,     maxDynamicTypeSize: .xxxLarge)
+        static let glyphStatus    = TypeToken(baseSize: 32, weight: .semibold, relativeTo: .title)
+        static let glyphEmpty     = TypeToken(baseSize: 44, weight: .regular,  relativeTo: .largeTitle)
+    }
+}
+
+// MARK: - Typography resolver
+
+/// Resolves a `Theme.TypeToken` to a scaled `Font` using `@ScaledMetric`.
+///
+/// `@ScaledMetric` reads `@Environment(\.dynamicTypeSize)` and applies the
+/// same non-linear curve Apple uses internally, so the resulting font honours
+/// `.dynamicTypeSize(...)`, Xcode previews, and subtree clamping.
+/// `Font.system(size:weight:design:)` alone does NOT scale — it is only
+/// correct here because `@ScaledMetric` supplies an already-scaled size.
+private struct TypographyModifier: ViewModifier {
+    let token: Theme.TypeToken
+
+    @ScaledMetric private var scaledSize: CGFloat
+
+    init(token: Theme.TypeToken) {
+        self.token = token
+        _scaledSize = ScaledMetric(wrappedValue: token.baseSize, relativeTo: token.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        if let cap = token.maxDynamicTypeSize {
+            content
+                .font(.system(size: scaledSize, weight: token.weight, design: token.design))
+                .dynamicTypeSize(...cap)
+        } else {
+            content
+                .font(.system(size: scaledSize, weight: token.weight, design: token.design))
+        }
+    }
+}
+
+extension View {
+    /// Applies a typographic role from `Theme.Typography`.
+    ///
+    /// Usage: `.font(Theme.Typography.rowTitle)`
+    func font(_ token: Theme.TypeToken) -> some View {
+        modifier(TypographyModifier(token: token))
     }
 }
 
@@ -90,12 +200,12 @@ struct SectionHeading: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.headline.weight(.semibold))
+                .font(Theme.Typography.screenTitle)
                 .foregroundStyle(Theme.Palette.textPrimary)
             Spacer()
             if let trailing {
                 Text(trailing)
-                    .font(.subheadline)
+                    .font(Theme.Typography.secondary)
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
         }
@@ -115,14 +225,14 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: Theme.Space.md) {
             Image(systemName: icon)
-                .font(.system(size: 44, weight: .light))
+                .font(Theme.Typography.glyphEmpty)
                 .foregroundStyle(Theme.Palette.textTertiary)
             Text(title)
-                .font(.headline)
+                .font(Theme.Typography.screenTitle)
                 .foregroundStyle(Theme.Palette.textSecondary)
             if let message {
                 Text(message)
-                    .font(.subheadline)
+                    .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Palette.textTertiary)
                     .multilineTextAlignment(.center)
             }

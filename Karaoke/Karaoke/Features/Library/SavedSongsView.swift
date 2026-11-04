@@ -149,17 +149,17 @@ struct SavedSongsView: View {
     private var storageSummaryCard: some View {
         HStack(spacing: Theme.Space.md) {
             Image(systemName: "internaldrive.fill")
-                .font(.title3)
+                .font(Theme.Typography.glyphStatus)
                 .foregroundStyle(Theme.Palette.accent)
                 .frame(width: 40, height: 40)
                 .background(Theme.Palette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
 
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text("Total Storage Used")
-                    .font(.subheadline)
+                    .font(Theme.Typography.screenTitle)
                     .foregroundStyle(Theme.Palette.textSecondary)
                 Text(totalStorageText)
-                    .font(.headline.monospacedDigit())
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.textPrimary)
             }
 
@@ -181,7 +181,7 @@ struct SavedSongsView: View {
 
     private var storageLabel: some View {
         Text(totalStorageText)
-            .font(.caption.weight(.medium).monospacedDigit())
+            .font(Theme.Typography.caption)
             .foregroundStyle(Theme.Palette.textSecondary)
             .padding(.horizontal, Theme.Space.sm)
             .padding(.vertical, Theme.Space.xs)
@@ -240,7 +240,7 @@ private struct SavedSongRow: View {
             HStack(spacing: Theme.Space.md) {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(songTitle)
-                        .font(.body.weight(.medium))
+                        .font(Theme.Typography.rowTitle)
                         .foregroundStyle(saved.state == .failed ? Theme.Palette.mechanismIssue : Theme.Palette.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -253,7 +253,7 @@ private struct SavedSongRow: View {
                         }
                         stateIndicator
                     }
-                    .font(.subheadline)
+                    .font(Theme.Typography.secondary)
                     .foregroundStyle(Theme.Palette.textSecondary)
                 }
 
@@ -261,7 +261,7 @@ private struct SavedSongRow: View {
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.body.weight(.medium))
+                        .font(Theme.Typography.bodyEmphasis)
                         .foregroundStyle(Theme.Palette.textSecondary)
                         .frame(width: Theme.Hit.minimum, height: Theme.Hit.minimum)
                         .background(Theme.Palette.surfaceRaised, in: Circle())
@@ -274,7 +274,7 @@ private struct SavedSongRow: View {
                 downloadProgress
             } else if saved.state == .failed, let error = saved.lastError {
                 Text(error)
-                    .font(.caption)
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.mechanismIssue)
                     .lineLimit(2)
             }
@@ -304,7 +304,7 @@ private struct SavedSongRow: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
-            .font(.caption.weight(.medium))
+            .font(Theme.Typography.caption)
 
         case .downloading:
             HStack(spacing: Theme.Space.xs) {
@@ -314,7 +314,7 @@ private struct SavedSongRow: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
-            .font(.caption.weight(.medium))
+            .font(Theme.Typography.caption)
 
         case .pending:
             HStack(spacing: Theme.Space.xs) {
@@ -324,7 +324,7 @@ private struct SavedSongRow: View {
                 Text("Waiting…")
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
-            .font(.caption.weight(.medium))
+            .font(Theme.Typography.caption)
 
         case .failed:
             HStack(spacing: Theme.Space.xs) {
@@ -338,7 +338,7 @@ private struct SavedSongRow: View {
                         .foregroundStyle(Theme.Palette.textTertiary)
                 }
             }
-            .font(.caption.weight(.semibold))
+            .font(Theme.Typography.caption)
         }
     }
 
@@ -357,7 +357,7 @@ private struct SavedSongRow: View {
 
             if let error = saved.lastError {
                 Text(error)
-                    .font(.caption2)
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.mechanismIssue)
                     .lineLimit(2)
             }
