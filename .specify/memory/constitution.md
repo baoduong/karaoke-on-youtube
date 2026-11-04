@@ -32,6 +32,18 @@ When something cannot work, the singer is told, in terms describing their situat
 
 This project is maintained by one person in spare time. Every abstraction must pay for itself within the current feature set. No dependency injection framework, no architecture pattern applied for its own sake, no module boundary without a second implementation behind it or a real-time-safety reason for it. The protocol boundaries this constitution mandates (Principle II) exist because the upstream genuinely breaks — that is the bar every other abstraction must also clear.
 
+### VIII. iPhone First, iPad On Purpose
+
+The iPhone is the reference platform. A screen is finished when it is right on an iPhone held in one hand, because the other hand is holding a microphone — every control the singer needs mid-song MUST be reachable that way.
+
+The iPad MUST NOT be served by a stretched iPhone layout. Either a shared layout is demonstrably right on both, or the iPad gets its own. A layout that merely fits on iPad without being designed for it fails this principle; "it does not crash at that width" is not a design.
+
+"Professional" is not left to taste. It means: spacing, colour, type, and corner radius come from the project's design tokens rather than from numbers typed at the call site; navigation, presentation, and controls follow the platform's own conventions rather than reinventing them; and the result is legible in a dim room at arm's length.
+
+A surface nothing navigates to is not shipped, whatever its state. The same applies to a control that renders but handles no input. This clause is not theoretical: this project has twice built interfaces that compiled, passed their tests, and could not be reached or tapped — the tests could not catch it, because there is nothing to assert about a view nobody can open.
+
+Rationale: the room is dim, the singer is occupied, and the audience is watching. An interface defect here is not cosmetic — it interrupts a performance in front of people.
+
 ## Legal and Distribution Constraints
 
 Distribution is personal sideloading only. App Store submission is out of scope and no work is spent on App Store compliance.
@@ -50,6 +62,7 @@ A change is complete when all of the following hold:
 4. Render-callback changes carry an explicit real-time-safety note.
 5. New upstream interaction is behind the Principle II boundary.
 6. No new outbound destination was introduced without a corresponding note in this constitution's privacy principle.
+7. Every new interface surface is reachable by the singer from a running app, and every new control has been operated — not merely rendered — on at least one device or simulator.
 
 A release — meaning a build installed on a device for actual singing — additionally requires a continuous session of at least thirty minutes with no crash, no dropout, and no advertisement.
 
@@ -59,6 +72,8 @@ This constitution governs the project. Where it conflicts with a convenient impl
 
 Amendments are made by editing this file, bumping the version, and stating what changed and why. Version numbering is MAJOR.MINOR.PATCH: MAJOR for removing or reversing a principle, MINOR for adding a principle or materially expanding one, PATCH for clarification that changes no behaviour.
 
+Principle numbering is stable. Specifications, contracts, and commit messages cite principles by number, so a new principle is appended rather than inserted, and a retired one leaves its number vacant.
+
 Principle VII cuts both ways: these rules are themselves subject to paying for themselves. A gate that produces no defect findings over a sustained period is a candidate for removal, by amendment.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-03
+**Version**: 1.1.0 | **Ratified**: 2026-11-03 | **Last Amended**: 2026-11-04
