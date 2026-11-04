@@ -415,3 +415,19 @@ This is a one-person project (Constitution Principle VII), so the parallel-team 
 - No real song text is committed anywhere — lyrics fixtures use synthetic placeholders only
 - T095 may legitimately be skipped if T015 concludes the upstream strategy is not worth its churn
 - Commit after each task or logical group
+
+## Phase 10: Convergence
+
+Assessed against the code as it stands, not against checkbox state. Every item
+below was confirmed by reading the source, and the evidence is named so the
+next pass can re-check it rather than take this on trust.
+
+- [ ] T146 Wire stale-address detection to `PlaybackSession.silentlyReResolve()`, or delete it and amend the requirement — the method exists at `PlaybackSession.swift:554` with zero callers, so an expired stream address ends the performance instead of being re-resolved, per FR-007 (missing)
+- [ ] T147 Decide FR-026 either way and make the code and spec agree: `QueueService.currentFinished()` has zero callers, so the queue never advances when a song ends. The singer has since asked for no auto-advance and `currentPlayedOut()` was added to match, which leaves the requirement itself wrong rather than the behaviour, per FR-026 (missing)
+- [ ] T148 Amend FR-019 and clean the stale comments it left behind: there is no on-screen word timing to compensate since the text-lyrics layer was removed, and `outputLatencyMs` is now only displayed in `QualityDetailView`. `AudioTypes.swift:80` and `:90` still describe it as driving the lyrics display, per FR-019 (contradicts)
+- [ ] T149 Amend FR-020 or rebuild the control: the manual display-versus-audio offset went with `LyricsOffsetView` when the lyrics layer was deleted, and nothing replaced it, per FR-020 (missing)
+- [ ] T150 Amend FR-024: it requires legible on-screen words and a text-size control, and the app renders neither — the words are burned into the video, which was the reason for removing the layer, per FR-024 (contradicts)
+- [ ] T151 Add a quickstart scenario measuring SC-015 on the device through the Bluetooth PA: a tone-control change audible within 200 ms with no click, plus the bypassed-capture half of SC-007. The feature shipped verified only on simulators, per SC-015 (missing)
+- [ ] T152 Amend FR-028: it promises to retain "key, tempo, balance, effects", all four of which were deliberately removed under FR-010 and FR-011. `PerformanceSettings` holds output volume and the tone control, per FR-028 (contradicts)
+- [ ] T153 Remove `PlaybackSession.playLocal(songID:rendition:url:)` or record why it stays — it has zero callers and the local path is already handled inside `play(songID:rendition:)` (unrequested)
+- [ ] T154 Record the privacy consequence of `--cookies-from-browser` in Constitution Principle V, or state why it is exempt: it introduces no new outbound destination but does attach the singer's Google account to upstream requests, which the principle does not currently address (unrequested)
